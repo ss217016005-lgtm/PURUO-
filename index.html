@@ -40,7 +40,6 @@
         .spoiler summary { background: #e5e7eb; padding: 10px; cursor: pointer; font-weight: bold; color: #374151; }
         .spoiler-content { padding: 15px; border-top: 1px solid #ccc; background: #f9fafb; }
         
-        /* עיצוב לתיוג משתמש */
         .tagged-user { color: #4F46E5; font-weight: bold; background: #e0e7ff; padding: 0 4px; border-radius: 4px; cursor: pointer; }
         
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(2px); }
@@ -62,7 +61,6 @@
 
     <div class="header">
         <h1>✨ פורום פרומרקייט ✨</h1>
-        <p style="margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;">הקהילה המקצועית והאיכותית ברשת</p>
     </div>
 
     <div id="authSection" style="max-width: 400px; margin: 50px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
@@ -101,9 +99,9 @@
                 <div id="newThreadForm" class="hidden" style="background: #fdf2f8; border: 1px solid #fbcfe8; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
                     <input type="text" id="newThreadTitle" placeholder="כותרת האשכול הרשמית">
                     <textarea id="newThreadContent" rows="4" placeholder="תוכן ההודעה... (לתיוג משתמש הקלד @ ושמו)"></textarea>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                         <div>
-                            <input type="file" id="newThreadFile" style="width: auto;">
+                            <input type="file" id="newThreadFile" style="width: auto; background: white; border: 1px solid #ccc; border-radius: 4px; padding: 5px;">
                             <button type="button" class="btn-action" style="background:#fff;" onclick="insertTag('newThreadContent', '[spoiler]', '[/spoiler]')">👁️ הכנס ספוילר</button>
                         </div>
                         <button onclick="createThread()">פרסם אשכול לציבור</button>
@@ -148,7 +146,6 @@
             document.getElementById('sysModal').classList.remove('hidden'); setTimeout(() => document.getElementById('modalInput').focus(), 100);
         }
 
-        // פונקציית עזר להכנסת תגיות (כמו ספוילר)
         window.insertTag = function(elementId, openTag, closeTag) {
             const el = document.getElementById(elementId);
             const start = el.selectionStart, end = el.selectionEnd;
@@ -159,11 +156,9 @@
             el.selectionEnd = end + openTag.length;
         };
 
-        // המרת BBCode (כולל ספוילר, ציטוט, ותיוג)
         function parseBBCode(text) { 
             let html = text.replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi, '<details class="spoiler"><summary>👁️ ספוילר (לחץ להצגה)</summary><div class="spoiler-content">$1</div></details>');
             html = html.replace(/\[quote="(.*?)"\]([\s\S]*?)\[\/quote\]/gi, '<div class="quote-box"><strong>מאת $1:</strong><br>$2</div>');
-            // תיוג משתמש (מודגש)
             html = html.replace(/@([א-תa-zA-Z0-9_]+)/g, '<span class="tagged-user" title="תיוג משתמש">@$1</span>');
             return html;
         }
@@ -306,10 +301,14 @@
 
         async function createThread() {
             const title = document.getElementById('newThreadTitle').value, content = document.getElementById('newThreadContent').value, cat = document.getElementById('categorySelect').value;
+            const fileInput = document.getElementById('newThreadFile');
             if (!title || !content || !cat) return showMsg('שגיאה', 'חובה למלא את כל השדות.');
-            const fd = new FormData(); fd.append('author', currentUser); fd.append('title', title); fd.append('content', content); fd.append('category', cat);
+            const fd = new FormData(); 
+            fd.append('author', currentUser); fd.append('title', title); fd.append('content', content); fd.append('category', cat);
+            if (fileInput.files[0]) fd.append('attachedFile', fileInput.files[0]);
+            
             await fetch('/api/posts', { method: 'POST', body: fd });
-            toggleNewThreadForm(); document.getElementById('newThreadTitle').value = ''; document.getElementById('newThreadContent').value = '';
+            toggleNewThreadForm(); document.getElementById('newThreadTitle').value = ''; document.getElementById('newThreadContent').value = ''; fileInput.value = '';
             history.pushState({}, '', '/'); loadPosts();
         }
 
@@ -384,8 +383,11 @@
                     <div style="border-top: 2px dashed var(--border); margin-top: 25px; padding-top: 20px;">
                         <h4 style="margin-top:0;">הוסף תגובה משלך:</h4>
                         <textarea id="replyContent" rows="4" placeholder="כתוב את תגובתך בכבוד הראוי... (לתיוג הקלד @ ושם)"></textarea>
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-                            <button type="button" class="btn-action" style="background:#fff; margin:0;" onclick="insertTag('replyContent', '[spoiler]', '[/spoiler]')">👁️ הכנס ספוילר</button>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <input type="file" id="replyFile" style="width: auto; background: white; border: 1px solid #ccc; border-radius: 4px; padding: 5px;">
+                                <button type="button" class="btn-action" style="background:#fff; margin:0;" onclick="insertTag('replyContent', '[spoiler]', '[/spoiler]')">👁️ הכנס ספוילר</button>
+                            </div>
                             <button onclick="addReply(${p.id})">שלח תגובה לאשכול</button>
                         </div>
                     </div>
@@ -400,8 +402,14 @@
 
         async function addReply(postId) {
             const content = document.getElementById('replyContent').value;
+            const fileInput = document.getElementById('replyFile');
             if (!content) return showMsg('שגיאה', 'לא ניתן לשלוח תגובה ריקה');
-            const fd = new FormData(); fd.append('author', currentUser); fd.append('content', content);
+            
+            const fd = new FormData(); 
+            fd.append('author', currentUser); 
+            fd.append('content', content);
+            if (fileInput && fileInput.files[0]) fd.append('attachedFile', fileInput.files[0]);
+
             const res = await fetch(`/api/posts/${postId}/reply`, { method: 'POST', body: fd });
             const data = await res.json();
             if(data.error) showMsg('שגיאה', data.error); else loadPosts();
