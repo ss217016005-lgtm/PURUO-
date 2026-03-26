@@ -24,6 +24,7 @@
         .thread-card { border: 1px solid var(--border); padding: 15px; border-radius: 10px; margin-bottom: 15px; background: #ffffff; cursor: pointer; transition: 0.2s; border-right: 4px solid var(--primary); display: flex; flex-direction: column;}
         .thread-card:hover { border-color: var(--primary); transform: translateX(-3px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
         .thread-title { font-size: 20px; font-weight: bold; color: var(--primary); margin-bottom: 8px; }
+        .thread-locked { border-right-color: #6B7280; opacity: 0.8; }
         
         .post-container { display: flex; background: #f9fafb; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 15px; overflow: hidden; }
         .user-panel { background: #f3f4f6; padding: 15px; width: 160px; text-align: center; border-left: 1px solid var(--border); }
@@ -32,13 +33,15 @@
         .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: white; }
         .badge-admin { background: #EF4444; } .badge-mod { background: #F59E0B; } .badge-vet { background: #8B5CF6; } .badge-user { background: #6B7280; }
         
-        /* עיצוב ציטוט כבלון כחול */
         .quote-box { background: #e0f2fe; border-right: 4px solid #0284c7; padding: 12px; margin: 10px 0; border-radius: 8px 0 0 8px; color: #0c4a6e; font-style: italic; position: relative; }
         .quote-box::before { content: "❝"; font-size: 24px; position: absolute; left: 10px; top: 5px; color: #7dd3fc; opacity: 0.5; }
         
         .spoiler { border: 1px solid #ccc; border-radius: 5px; background: #fff; margin: 10px 0; overflow: hidden; }
         .spoiler summary { background: #e5e7eb; padding: 10px; cursor: pointer; font-weight: bold; color: #374151; }
         .spoiler-content { padding: 15px; border-top: 1px solid #ccc; background: #f9fafb; }
+        
+        /* עיצוב לתיוג משתמש */
+        .tagged-user { color: #4F46E5; font-weight: bold; background: #e0e7ff; padding: 0 4px; border-radius: 4px; cursor: pointer; }
         
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(2px); }
         .modal-box { background: white; padding: 25px; border-radius: 12px; text-align: center; max-width: 500px; width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.2); max-height: 80vh; overflow-y: auto;}
@@ -97,9 +100,14 @@
 
                 <div id="newThreadForm" class="hidden" style="background: #fdf2f8; border: 1px solid #fbcfe8; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
                     <input type="text" id="newThreadTitle" placeholder="כותרת האשכול הרשמית">
-                    <textarea id="newThreadContent" rows="4" placeholder="תוכן ההודעה... (להוספת ספוילר הקלד [spoiler]הטקסט[/spoiler])"></textarea>
-                    <input type="file" id="newThreadFile">
-                    <button onclick="createThread()">פרסם אשכול לציבור</button>
+                    <textarea id="newThreadContent" rows="4" placeholder="תוכן ההודעה... (לתיוג משתמש הקלד @ ושמו)"></textarea>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <input type="file" id="newThreadFile" style="width: auto;">
+                            <button type="button" class="btn-action" style="background:#fff;" onclick="insertTag('newThreadContent', '[spoiler]', '[/spoiler]')">👁️ הכנס ספוילר</button>
+                        </div>
+                        <button onclick="createThread()">פרסם אשכול לציבור</button>
+                    </div>
                 </div>
                 <div id="threadsList"></div>
             </div>
@@ -133,15 +141,33 @@
             document.getElementById('sysModalBtns').innerHTML = `<button onclick="closeModal(); confirmActionCb();" style="background:#EF4444; margin-left:10px;">כן, בצע</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`;
             document.getElementById('sysModal').classList.remove('hidden');
         }
+        function showInputMsg(text, cb) {
+            document.getElementById('sysModalTitle').innerText = 'הזנת נתונים';
+            document.getElementById('sysModalText').innerHTML = `${text}<br><br><input type="text" id="modalInput" style="width:100%;">`;
+            document.getElementById('sysModalBtns').innerHTML = `<button onclick="closeModal(); ${cb.name}(document.getElementById('modalInput').value);" style="background:#10B981; margin-left:10px;">שמור</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`;
+            document.getElementById('sysModal').classList.remove('hidden'); setTimeout(() => document.getElementById('modalInput').focus(), 100);
+        }
 
-        // המרת BBCode לספוילר וציטוט
+        // פונקציית עזר להכנסת תגיות (כמו ספוילר)
+        window.insertTag = function(elementId, openTag, closeTag) {
+            const el = document.getElementById(elementId);
+            const start = el.selectionStart, end = el.selectionEnd;
+            const text = el.value;
+            el.value = text.substring(0, start) + openTag + text.substring(start, end) + closeTag + text.substring(end, text.length);
+            el.focus();
+            el.selectionStart = start + openTag.length;
+            el.selectionEnd = end + openTag.length;
+        };
+
+        // המרת BBCode (כולל ספוילר, ציטוט, ותיוג)
         function parseBBCode(text) { 
             let html = text.replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi, '<details class="spoiler"><summary>👁️ ספוילר (לחץ להצגה)</summary><div class="spoiler-content">$1</div></details>');
             html = html.replace(/\[quote="(.*?)"\]([\s\S]*?)\[\/quote\]/gi, '<div class="quote-box"><strong>מאת $1:</strong><br>$2</div>');
+            // תיוג משתמש (מודגש)
+            html = html.replace(/@([א-תa-zA-Z0-9_]+)/g, '<span class="tagged-user" title="תיוג משתמש">@$1</span>');
             return html;
         }
 
-        // האזנה לחצים של הדפדפן (תיקון קישורים)
         window.addEventListener('popstate', () => {
             const urlParams = new URLSearchParams(window.location.search);
             const threadId = parseInt(urlParams.get('thread'));
@@ -152,11 +178,6 @@
         window.onload = () => {
             const savedUser = localStorage.getItem('forumUser') || sessionStorage.getItem('forumUser');
             if (savedUser) { currentUser = savedUser; enterForum(); }
-            else {
-                // בדיקת קישור נכנס לא מחובר
-                const urlParams = new URLSearchParams(window.location.search);
-                if(urlParams.get('thread')) showMsg('הודעה', 'עליך להתחבר כדי לצפות באשכול זה.');
-            }
         };
 
         async function authCall(url, u, p) {
@@ -185,7 +206,6 @@
             document.getElementById('forumSection').classList.remove('hidden');
             document.getElementById('welcomeMsg').innerText = `שלום, ${currentUser}`;
             await initForum();
-            // הגדרת כפתור מנהל אם צריך
             if(usersInfo[currentUser] && usersInfo[currentUser].role === 'admin') document.getElementById('adminBtn').classList.remove('hidden');
         }
 
@@ -213,25 +233,19 @@
             if (data.unreadMessages > 0) { mBadge.innerText = data.unreadMessages; mBadge.classList.remove('hidden'); } else mBadge.classList.add('hidden');
         }
 
-        // --- הודעות פרטיות ---
         async function openInbox() {
             const res = await fetch(`/api/messages/${currentUser}`);
             const msgs = await res.json();
-            document.getElementById('msgBadge').classList.add('hidden'); // סימון כנקרא
-            
+            document.getElementById('msgBadge').classList.add('hidden'); 
             let html = `<div style="max-height: 300px; overflow-y:auto; margin-bottom:15px; background:#f9fafb; padding:10px; border-radius:8px;">`;
             if (msgs.length === 0) html += "<p>אין לך הודעות פרטיות.</p>";
-            else {
-                msgs.forEach(m => { html += `<div style="background:white; border:1px solid #ddd; padding:10px; margin-bottom:10px; border-radius:5px; text-align:right;"><strong style="color:var(--primary);">${m.from}</strong> <span style="font-size:11px; color:#888;">${m.date}</span><div style="margin-top:5px; white-space:pre-wrap;">${m.content}</div></div>`; });
-            }
-            html += `</div>`;
-            showMsg('תיבת הודעות נכנסות', html);
+            else { msgs.forEach(m => { html += `<div style="background:white; border:1px solid #ddd; padding:10px; margin-bottom:10px; border-radius:5px; text-align:right;"><strong style="color:var(--primary);">${m.from}</strong> <span style="font-size:11px; color:#888;">${m.date}</span><div style="margin-top:5px; white-space:pre-wrap;">${m.content}</div></div>`; }); }
+            html += `</div>`; showMsg('תיבת הודעות נכנסות', html);
         }
 
         function triggerSendPM(toUser) {
             const info = usersInfo[currentUser];
             if (!info || !info.isVeteran) return showMsg('שגיאה', 'רק משתמשים ותיקים (עם 10 לייקים) או חברי הנהלה יכולים לשלוח הודעות פרטיות.');
-            
             document.getElementById('sysModalTitle').innerText = `שליחת הודעה פרטית אל: ${toUser}`;
             document.getElementById('sysModalText').innerHTML = `<textarea id="pmContent" rows="4" style="width:100%;" placeholder="כתוב כאן..."></textarea>`;
             document.getElementById('sysModalBtns').innerHTML = `<button onclick="sendPM('${toUser}')" style="background:#10B981;">שלח הודעה</button> <button onclick="closeModal()">ביטול</button>`;
@@ -239,13 +253,11 @@
         }
 
         async function sendPM(toUser) {
-            const content = document.getElementById('pmContent').value;
-            if(!content) return;
+            const content = document.getElementById('pmContent').value; if(!content) return;
             await fetch('/api/messages', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({from: currentUser, to: toUser, content}) });
             closeModal(); showMsg('הצלחה', 'ההודעה נשלחה לנמען!');
         }
 
-        // התראות
         window.gotoThread = function(threadId) { closeModal(); openThread(threadId, false); };
         async function showNotifications() {
             const res = await fetch('/api/notifications/clear', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser}) });
@@ -266,7 +278,6 @@
             postsData = await (await fetch('/api/posts')).json();
             const urlParams = new URLSearchParams(window.location.search);
             const urlThreadId = parseInt(urlParams.get('thread'));
-            
             if (urlThreadId && postsData.find(p => p.id === urlThreadId)) openThread(urlThreadId, true);
             else {
                 const currentOpenId = parseInt(document.getElementById('singleThreadView').getAttribute('data-current-id'));
@@ -281,11 +292,11 @@
             let filtered = cat ? postsData.filter(p => p.category === cat) : postsData;
             
             document.getElementById('threadsList').innerHTML = filtered.reverse().map(p => `
-                <div class="thread-card" onclick="openThread(${p.id})">
-                    <div class="thread-title">${p.title}</div>
+                <div class="thread-card ${p.isLocked ? 'thread-locked' : ''}" onclick="openThread(${p.id})">
+                    <div class="thread-title">${p.isLocked ? '🔒 ' : ''}${p.title}</div>
                     <div style="font-size: 13px; color: #6B7280; display: flex; justify-content: space-between;">
                         <span>מאת: <strong>${p.author}</strong></span>
-                        <span>קטגוריה: ${p.category} | תגובות: ${p.replies.length} | עוקבים: ${p.followers.length}</span>
+                        <span>קטגוריה: ${p.category} | תגובות: ${p.replies.length}</span>
                     </div>
                 </div>
             `).join('');
@@ -308,16 +319,14 @@
             if (info.role === 'admin') roleHtml = `<span class="badge badge-admin">👑 מנהל ראשי</span>`;
             else if (info.role === 'mod') roleHtml = `<span class="badge badge-mod">🛡️ צוות פיקוח</span>`;
             else if (info.isVeteran) roleHtml = `<span class="badge badge-vet">🌟 משתמש ותיק</span>`;
-            
             return `${roleHtml}<br>
                     <span style="font-size:11px; color:#6B7280; display:block; margin-top:5px;">הצטרף ב: ${info.joinDate}</span>
                     <span style="font-size:11px; color:#EC4899; font-weight:bold;">❤️ לייקים: ${info.totalLikes}</span>
                     ${currentUser !== username ? `<br><button class="btn-action" style="margin-top:5px; padding:3px 6px; font-size:10px;" onclick="triggerSendPM('${username}')">✉️ שלח הודעה</button>` : ''}`;
         }
 
-        // מערכת ציטוט
         window.insertQuote = function(author, content) {
-            const cleanContent = content.replace(/\[quote=".*?"\][\s\S]*?\[\/quote\]/gi, ''); // מסיר ציטוט בתוך ציטוט
+            const cleanContent = content.replace(/\[quote=".*?"\][\s\S]*?\[\/quote\]/gi, '');
             document.getElementById('replyContent').value += `[quote="${author}"]\n${cleanContent.trim()}\n[/quote]\n\n`;
             document.getElementById('replyContent').focus();
         };
@@ -326,7 +335,8 @@
             const hasLiked = p.likes.includes(currentUser);
             const canMod = currentUserRole === 'admin' || currentUserRole === 'mod';
             const parsedContent = parseBBCode(p.content);
-            const moveBtn = (isMain && currentUserRole === 'admin') ? `<button class="btn-action" onclick="triggerMove(${p.id})">📂 העבר קטגוריה</button>` : '';
+            const moveBtn = (isMain && currentUserRole === 'admin') ? `<button class="btn-action" onclick="triggerMove(${p.id})">📂 העבר</button>` : '';
+            const lockBtn = (isMain && canMod) ? `<button class="btn-action" style="color:#4b5563;" onclick="triggerLock(${p.id})">${p.isLocked ? '🔓 שחרר נעילה' : '🔒 נעל אשכול'}</button>` : '';
             
             return `
             <div class="post-container" id="post-${replyId || p.id}">
@@ -335,17 +345,17 @@
                     ${getUserBadge(p.author)}
                 </div>
                 <div class="content-panel">
-                    ${isMain ? `<h2 style="margin: 0 0 10px 0; color: var(--text);">${p.title}</h2>` : ''}
+                    ${isMain ? `<h2 style="margin: 0 0 10px 0; color: var(--text);">${p.isLocked ? '🔒 ' : ''}${p.title}</h2>` : ''}
                     <div style="font-size: 12px; color: #9CA3AF; margin-bottom: 10px;">פורסם בתאריך: ${p.date}</div>
                     <div style="font-size: 15px; white-space: pre-wrap; line-height: 1.6;">${parsedContent}</div>
                     ${p.fileUrl ? `<div style="margin-top: 15px;"><a href="${p.fileUrl}" target="_blank" style="background:#E5E7EB; padding:5px 10px; border-radius:5px; text-decoration:none; color:#374151;">📎 קובץ מצורף</a></div>` : ''}
                     
                     <div style="margin-top: auto; padding-top: 15px; display: flex; gap: 8px; border-top: 1px solid #e5e7eb; flex-wrap: wrap;">
                         <button class="btn-action ${hasLiked ? 'liked' : ''}" onclick="toggleLike(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">👍 נהניתי (${p.likes.length})</button>
-                        <button class="btn-action" onclick="insertQuote('${p.author}', \`${p.content.replace(/`/g, "'")}\`)">💬 צטט</button>
+                        ${(!parentPost || !parentPost.isLocked) ? `<button class="btn-action" onclick="insertQuote('${p.author}', \`${p.content.replace(/`/g, "'")}\`)">💬 צטט</button>` : ''}
                         <button class="btn-action" style="color:#b91c1c;" onclick="triggerReport(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">🚨 דווח</button>
                         ${canMod ? `<button class="btn-action" style="color:#b45309;" onclick="triggerEdit(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">✏️ עריכה</button>` : ''}
-                        ${moveBtn}
+                        ${moveBtn} ${lockBtn}
                     </div>
                 </div>
             </div>`;
@@ -354,7 +364,6 @@
         function openThread(id, isRefresh = false) {
             const p = postsData.find(x => x.id === id);
             if (!p) return backToThreads();
-            
             if (!isRefresh && window.location.search !== `?thread=${id}`) history.pushState({thread: id}, '', '/?thread=' + id);
 
             document.getElementById('threadsView').classList.add('hidden');
@@ -368,13 +377,20 @@
             html += `<h3 style="margin-top: 30px; border-bottom: 2px solid var(--primary); padding-bottom: 5px; display:inline-block;">💬 תגובות לאשכול (${p.replies.length}):</h3>`;
             html += `<div id="repliesList" style="margin-top:15px;">${p.replies.map(r => renderPostBlock(r, r.id, false, p)).join('')}</div>`;
             
-            html += `
-                <div style="border-top: 2px dashed var(--border); margin-top: 25px; padding-top: 20px;">
-                    <h4 style="margin-top:0;">הוסף תגובה משלך:</h4>
-                    <textarea id="replyContent" rows="4" placeholder="כתוב את תגובתך בכבוד הראוי... (ניתן להשתמש בכפתור הציטוט למעלה)"></textarea>
-                    <button onclick="addReply(${p.id})">שלח תגובה לאשכול</button>
-                </div>
-            `;
+            if (p.isLocked) {
+                html += `<div style="background: #fee2e2; border: 1px solid #fca5a5; color: #b91c1c; padding: 20px; text-align: center; font-weight: bold; border-radius: 8px; margin-top: 25px;">🔒 אשכול זה נעול לתגובות על ידי צוות ההנהלה.</div>`;
+            } else {
+                html += `
+                    <div style="border-top: 2px dashed var(--border); margin-top: 25px; padding-top: 20px;">
+                        <h4 style="margin-top:0;">הוסף תגובה משלך:</h4>
+                        <textarea id="replyContent" rows="4" placeholder="כתוב את תגובתך בכבוד הראוי... (לתיוג הקלד @ ושם)"></textarea>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                            <button type="button" class="btn-action" style="background:#fff; margin:0;" onclick="insertTag('replyContent', '[spoiler]', '[/spoiler]')">👁️ הכנס ספוילר</button>
+                            <button onclick="addReply(${p.id})">שלח תגובה לאשכול</button>
+                        </div>
+                    </div>
+                `;
+            }
             document.getElementById('threadContentArea').innerHTML = html;
         }
 
@@ -386,13 +402,20 @@
             const content = document.getElementById('replyContent').value;
             if (!content) return showMsg('שגיאה', 'לא ניתן לשלוח תגובה ריקה');
             const fd = new FormData(); fd.append('author', currentUser); fd.append('content', content);
-            await fetch(`/api/posts/${postId}/reply`, { method: 'POST', body: fd }); loadPosts();
+            const res = await fetch(`/api/posts/${postId}/reply`, { method: 'POST', body: fd });
+            const data = await res.json();
+            if(data.error) showMsg('שגיאה', data.error); else loadPosts();
         }
 
         async function toggleLike(postId, replyId) {
             const res = await fetch('/api/like', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, replyId}) });
             const data = await res.json();
-            if(data.error) showMsg('שגיאה', data.error); else { await initForum(); } // initForum יטען הכל מחדש ויעדכן סטטוס ותיק
+            if(data.error) showMsg('שגיאה', data.error); else await initForum();
+        }
+
+        async function triggerLock(postId) {
+            await fetch('/api/posts/lock', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId}) });
+            loadPosts();
         }
 
         function triggerMove(postId) {
@@ -410,10 +433,7 @@
         let currentActionPostId, currentActionReplyId;
         function triggerReport(postId, replyId) {
             currentActionPostId = postId; currentActionReplyId = replyId;
-            document.getElementById('sysModalTitle').innerText = 'דיווח להנהלה';
-            document.getElementById('sysModalText').innerHTML = `מה סיבת הדיווח?<br><br><input type="text" id="modalInput" style="width:100%;">`;
-            document.getElementById('sysModalBtns').innerHTML = `<button onclick="closeModal(); submitReport(document.getElementById('modalInput').value);" style="background:#10B981; margin-left:10px;">שלח דיווח</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`;
-            document.getElementById('sysModal').classList.remove('hidden'); setTimeout(() => document.getElementById('modalInput').focus(), 100);
+            showInputMsg("מה סיבת הדיווח?", submitReport);
         }
         async function submitReport(reason) {
             if (!reason) return;
