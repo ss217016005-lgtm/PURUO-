@@ -17,13 +17,19 @@
         button:hover { transform: translateY(-1px); box-shadow: 0 4px 6px rgba(79, 70, 229, 0.3); }
         .btn-action { background: #f3f4f6; color: #4b5563; border: 1px solid #d1d5db; font-size: 13px; padding: 6px 10px; border-radius: 6px; cursor: pointer; display: inline-block; margin-left: 5px; }
         .btn-action.liked { background: #fbcfe8; color: #be185d; border-color: #f9a8d4; }
-        .thread-card { border: 1px solid var(--border); padding: 15px; border-radius: 10px; margin-bottom: 15px; background: #ffffff; cursor: pointer; transition: 0.2s; border-right: 4px solid var(--primary); display: flex; flex-direction: column;}
-        .thread-card:hover { border-color: var(--primary); transform: translateX(-3px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        .thread-title { font-size: 20px; font-weight: bold; color: var(--primary); margin-bottom: 8px; }
-        .thread-locked { border-right-color: #6B7280; opacity: 0.8; }
+        
+        .thread-card { border: 1px solid var(--border); padding: 15px; border-radius: 10px; margin-bottom: 15px; background: #ffffff; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column;}
+        .thread-card:hover { transform: translateX(-3px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .thread-title { font-size: 20px; font-weight: bold; color: var(--primary); margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+        .thread-locked { opacity: 0.8; }
+        
+        /* תגיות צבעוניות לקטגוריות */
+        .cat-tag { padding: 3px 8px; border-radius: 6px; color: white; font-size: 12px; font-weight: bold; text-shadow: 0 1px 1px rgba(0,0,0,0.2); }
+        
         .post-container { display: flex; background: #f9fafb; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 15px; overflow: hidden; }
         .user-panel { background: #f3f4f6; padding: 15px; width: 160px; text-align: center; border-left: 1px solid var(--border); }
         .content-panel { padding: 15px; flex: 1; display: flex; flex-direction: column; }
+        
         .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: white; }
         .badge-admin { background: #EF4444; } .badge-mod { background: #F59E0B; } .badge-vet { background: #8B5CF6; } .badge-user { background: #6B7280; }
         .quote-box { background: #e0f2fe; border-right: 4px solid #0284c7; padding: 12px; margin: 10px 0; border-radius: 8px 0 0 8px; color: #0c4a6e; font-style: italic; position: relative; }
@@ -32,7 +38,12 @@
         .spoiler summary { background: #e5e7eb; padding: 10px; cursor: pointer; font-weight: bold; color: #374151; }
         .spoiler-content { padding: 15px; border-top: 1px solid #ccc; background: #f9fafb; }
         .tagged-user { color: #4F46E5; font-weight: bold; background: #e0e7ff; padding: 0 4px; border-radius: 4px; cursor: pointer; }
-        .unread-badge { color: red; font-size: 14px; font-weight: bold; margin-right: 5px; }
+        .unread-badge { color: red; font-size: 12px; font-weight: bold; background: #fee2e2; padding: 2px 6px; border-radius: 4px; }
+        
+        /* פרופיל משתמש לחיץ */
+        .clickable-user { cursor: pointer; color: var(--primary); text-decoration: underline; text-decoration-color: transparent; transition: 0.2s; }
+        .clickable-user:hover { text-decoration-color: var(--primary); }
+        
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(2px); }
         .modal-box { background: white; padding: 25px; border-radius: 12px; text-align: center; max-width: 500px; width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.2); max-height: 80vh; overflow-y: auto;}
         .icon-btn { cursor: pointer; font-size: 20px; position: relative; margin-left: 15px; background: none; border: none; padding: 0; color: #1F2937; }
@@ -66,6 +77,11 @@
                 <div><button id="adminBtn" class="hidden" onclick="window.location.href='/admin.html'" style="background: #10B981; margin-left: 10px;">ניהול</button><button onclick="logout()" style="background: #EF4444;">התנתק</button></div>
             </div>
 
+            <div id="userProfileView" class="hidden">
+                <button onclick="closeProfileAndReturn()" style="background: #6B7280; margin-bottom: 20px;">➔ חזור</button>
+                <div id="profileContentArea" style="background: #f9fafb; padding: 20px; border-radius: 10px; border: 1px solid var(--border);"></div>
+            </div>
+
             <div id="threadsView">
                 <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px;">
                     <select id="categorySelect" onchange="renderThreads()" style="flex: 2; margin: 0; font-weight: bold;"></select>
@@ -80,7 +96,7 @@
                             <input type="file" id="newThreadFile" multiple style="width: auto; background: white; border: 1px solid #ccc; border-radius: 4px; padding: 5px;">
                             <button type="button" class="btn-action" style="background:#fff;" onclick="insertTag('newThreadContent', '[spoiler]', '[/spoiler]')">👁️ הוסף ספוילר</button>
                         </div>
-                        <button onclick="createThread()">פרסם אשכול לציבור</button>
+                        <button onclick="createThread()">פרסם אשכול</button>
                     </div>
                 </div>
                 <div id="threadsList"></div>
@@ -102,6 +118,18 @@
     <script>
         let currentUser = null, currentUserRole = null, postsData = [], usersInfo = {}, confirmActionCb = null;
         let readThreads = JSON.parse(localStorage.getItem('readThreads')) || {};
+        
+        const catColors = { "תמונות והסרטות": "#3b82f6", "עזרה הדדית": "#10b981", "למעשה": "#8b5cf6", "הפורום שלנו": "#f59e0b", "חדשות בציבור": "#ef4444" };
+        function getCatColor(cat) { return catColors[cat] || "#6B7280"; }
+
+        function timeAgo(ms) {
+            if (!ms) return 'לא ידוע';
+            const seconds = Math.floor((Date.now() - ms) / 1000);
+            if (seconds < 60) return 'מחובר כעת 🟢';
+            const minutes = Math.floor(seconds / 60); if (minutes < 60) return `לפני ${minutes} דקות`;
+            const hours = Math.floor(minutes / 60); if (hours < 24) return `לפני ${hours} שעות`;
+            return `לפני ${Math.floor(hours / 24)} ימים`;
+        }
 
         function showMsg(title, text, htmlMode = true) { document.getElementById('sysModalTitle').innerText = title; document.getElementById('sysModalText').innerHTML = htmlMode ? text : `<div style="white-space:pre-wrap;">${text}</div>`; document.getElementById('sysModalBtns').innerHTML = `<button onclick="closeModal()">סגור</button>`; document.getElementById('sysModal').classList.remove('hidden'); }
         function closeModal() { document.getElementById('sysModal').classList.add('hidden'); }
@@ -116,42 +144,30 @@
 
         function parseBBCode(text) { 
             let html = text.replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi, '<details class="spoiler"><summary>👁️ ספוילר (לחץ להצגה)</summary><div class="spoiler-content">$1</div></details>');
-            html = html.replace(/@([א-תa-zA-Z0-9_]+)/g, '<span class="tagged-user" title="תיוג">@$1</span>');
-            let prevHtml; do { prevHtml = html; html = html.replace(/\[quote="(.*?)"\]([\s\S]*?)\[\/quote\]/gi, '<div class="quote-box"><strong>מאת $1:</strong><br>$2</div>'); } while (html !== prevHtml); // ציטוט בתוך ציטוט עובד!
+            html = html.replace(/@([א-תa-zA-Z0-9_]+)/g, '<span class="tagged-user" title="תיוג" onclick="showUserProfile(\'$1\'); event.stopPropagation();">@$1</span>');
+            let prevHtml; do { prevHtml = html; html = html.replace(/\[quote="(.*?)"\]([\s\S]*?)\[\/quote\]/gi, '<div class="quote-box"><strong>מאת $1:</strong><br>$2</div>'); } while (html !== prevHtml);
             return html;
         }
 
         window.addEventListener('popstate', () => {
             const urlParams = new URLSearchParams(window.location.search);
-            const threadId = parseInt(urlParams.get('thread'));
-            if (threadId) openThread(threadId, true); else { document.getElementById('singleThreadView').setAttribute('data-current-id', ''); renderThreads(); }
+            if (urlParams.get('thread')) openThread(parseInt(urlParams.get('thread')), true);
+            else { document.getElementById('singleThreadView').setAttribute('data-current-id', ''); document.getElementById('userProfileView').classList.add('hidden'); renderThreads(); }
         });
 
-        window.onload = () => {
-            const savedUser = localStorage.getItem('forumUser') || sessionStorage.getItem('forumUser');
-            if (savedUser) { currentUser = savedUser; enterForum(); }
-        };
+        window.onload = () => { const savedUser = localStorage.getItem('forumUser') || sessionStorage.getItem('forumUser'); if (savedUser) { currentUser = savedUser; enterForum(); } };
 
-        async function authCall(url, u, p) {
-            if (!u || !p) return showMsg('שגיאה', 'אנא מלא הכל', false);
-            const res = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: u, password: p}) });
-            return await res.json();
-        }
-
+        async function authCall(url, u, p) { if (!u || !p) return showMsg('שגיאה', 'אנא מלא הכל', false); const res = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: u, password: p}) }); return await res.json(); }
         async function register() { const data = await authCall('/api/register', document.getElementById('username').value, document.getElementById('password').value); if(data.message) showMsg('הרשמה', data.message); else showMsg('שגיאה', data.error); }
         async function login() {
             const data = await authCall('/api/login', document.getElementById('username').value, document.getElementById('password').value);
-            if (data.message) {
-                currentUser = data.username; const remember = document.getElementById('rememberMe').checked;
-                (remember ? localStorage : sessionStorage).setItem('forumUser', currentUser); enterForum();
-            } else showMsg('שגיאה', data.error);
+            if (data.message) { currentUser = data.username; const remember = document.getElementById('rememberMe').checked; (remember ? localStorage : sessionStorage).setItem('forumUser', currentUser); enterForum(); } else showMsg('שגיאה', data.error);
         }
 
         async function enterForum() {
             document.getElementById('authSection').classList.add('hidden'); document.getElementById('forumSection').classList.remove('hidden'); document.getElementById('welcomeMsg').innerText = `שלום, ${currentUser}`; await initForum();
             if(usersInfo[currentUser] && usersInfo[currentUser].role === 'admin') document.getElementById('adminBtn').classList.remove('hidden');
         }
-
         function logout() { localStorage.clear(); sessionStorage.clear(); location.href = '/'; }
 
         async function initForum() {
@@ -165,25 +181,54 @@
             const res = await fetch('/api/ping', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser}) });
             const data = await res.json();
             document.getElementById('onlineCount').innerText = data.onlineUsers.length;
-            document.getElementById('onlineUsersList').innerHTML = data.onlineUsers.map(u => `<li style="padding: 5px 0; border-bottom: 1px solid #eee;">🟢 ${u}</li>`).join('');
+            document.getElementById('onlineUsersList').innerHTML = data.onlineUsers.map(u => `<li style="padding: 5px 0; border-bottom: 1px solid #eee; cursor:pointer;" onclick="showUserProfile('${u}')">🟢 <span class="clickable-user">${u}</span></li>`).join('');
             const nBadge = document.getElementById('notifBadge'); if (data.unreadCount > 0) { nBadge.innerText = data.unreadCount; nBadge.classList.remove('hidden'); } else nBadge.classList.add('hidden');
             const mBadge = document.getElementById('msgBadge'); if (data.unreadMessages > 0) { mBadge.innerText = data.unreadMessages; mBadge.classList.remove('hidden'); } else mBadge.classList.add('hidden');
         }
 
+        // --- פרופיל משתמש לחיץ ---
+        window.showUserProfile = function(username) {
+            document.getElementById('threadsView').classList.add('hidden'); document.getElementById('singleThreadView').classList.add('hidden');
+            document.getElementById('userProfileView').classList.remove('hidden');
+            const info = usersInfo[username]; if (!info) return;
+            
+            // חיפוש הודעות של המשתמש
+            let userPostsHtml = "<h4>פעילות אחרונה בפורום:</h4>";
+            let found = 0;
+            postsData.forEach(p => {
+                if (p.author === username) { found++; userPostsHtml += `<div style="background:white; border:1px solid #ddd; padding:10px; margin-bottom:5px; border-radius:5px; cursor:pointer;" onclick="openThread(${p.id})"><strong>אשכול:</strong> <span style="color:var(--primary);">${p.title}</span> <span style="font-size:11px; color:#888;">(${p.date})</span></div>`; }
+                p.replies.forEach(r => {
+                    if (r.author === username) { found++; userPostsHtml += `<div style="background:white; border:1px solid #ddd; padding:10px; margin-bottom:5px; border-radius:5px; cursor:pointer;" onclick="openThread(${p.id})"><strong>הגיב באשכול:</strong> <span style="color:var(--primary);">${p.title}</span> <span style="font-size:11px; color:#888;">(${r.date})</span></div>`; }
+                });
+            });
+            if (found === 0) userPostsHtml += "<p>המשתמש עדיין לא כתב הודעות בפורום.</p>";
+
+            let roleStr = info.role === 'admin' ? "👑 מנהל ראשי" : (info.role === 'mod' ? "🛡️ מפקח" : (info.isVeteran ? "🌟 משתמש ותיק" : "👤 משתמש רגיל"));
+            document.getElementById('profileContentArea').innerHTML = `
+                <h2 style="color:var(--primary); margin-top:0;">פרופיל משתמש: ${username}</h2>
+                <div style="font-size:16px; line-height:1.8; margin-bottom: 20px;">
+                    <strong>סטטוס:</strong> ${roleStr}<br>
+                    <strong>הצטרף ב:</strong> ${info.joinDate}<br>
+                    <strong>נראה לאחרונה בפורום:</strong> ${timeAgo(info.lastSeen)}<br>
+                    <strong>לייקים שקיבל:</strong> ❤️ ${info.totalLikes}<br>
+                    ${currentUser !== username ? `<button class="btn-action" style="margin-top:10px; background:var(--primary); color:white;" onclick="triggerSendPM('${username}')">✉️ שלח הודעה פרטית</button>` : ''}
+                </div>
+                ${userPostsHtml}
+            `;
+        };
+        window.closeProfileAndReturn = function() { document.getElementById('userProfileView').classList.add('hidden'); renderThreads(); };
+
         async function openInbox() {
             const res = await fetch(`/api/messages/${currentUser}`); const msgs = await res.json(); document.getElementById('msgBadge').classList.add('hidden'); 
             let html = `<div style="max-height: 300px; overflow-y:auto; margin-bottom:15px; background:#f9fafb; padding:10px; border-radius:8px;">`;
-            if (msgs.length === 0) html += "<p>אין לך הודעות פרטיות.</p>"; else msgs.forEach(m => { html += `<div style="background:white; border:1px solid #ddd; padding:10px; margin-bottom:10px; border-radius:5px; text-align:right;"><strong style="color:var(--primary);">${m.from}</strong> <span style="font-size:11px; color:#888;">${m.date}</span><div style="margin-top:5px; white-space:pre-wrap;">${m.content}</div></div>`; });
-            showMsg('תיבת הודעות', html + `</div>`);
+            if (msgs.length === 0) html += "<p>אין לך הודעות.</p>"; else msgs.forEach(m => { html += `<div style="background:white; border:1px solid #ddd; padding:10px; margin-bottom:10px; border-radius:5px; text-align:right;"><strong style="color:var(--primary);">${m.from}</strong> <span style="font-size:11px; color:#888;">${m.date}</span><div style="margin-top:5px; white-space:pre-wrap;">${m.content}</div></div>`; });
+            showMsg('הודעות פרטיות', html + `</div>`);
         }
         function triggerSendPM(toUser) {
-            if (!usersInfo[currentUser].isVeteran) return showMsg('שגיאה', 'רק משתמשים ותיקים יכולים לשלוח הודעות פרטיות.');
-            document.getElementById('sysModalTitle').innerText = `הודעה אל: ${toUser}`; document.getElementById('sysModalText').innerHTML = `<textarea id="pmContent" rows="4" style="width:100%;"></textarea>`; document.getElementById('sysModalBtns').innerHTML = `<button onclick="sendPM('${toUser}')" style="background:#10B981;">שלח</button> <button onclick="closeModal()">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden');
+            if (!usersInfo[currentUser].isVeteran) return showMsg('שגיאה', 'רק משתמשים ותיקים (עם 10 לייקים) יכולים לשלוח פרטיות.');
+            document.getElementById('sysModalTitle').innerText = `הודעה ל: ${toUser}`; document.getElementById('sysModalText').innerHTML = `<textarea id="pmContent" rows="4" style="width:100%;"></textarea>`; document.getElementById('sysModalBtns').innerHTML = `<button onclick="sendPM('${toUser}')" style="background:#10B981;">שלח</button> <button onclick="closeModal()">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden');
         }
-        async function sendPM(toUser) {
-            const content = document.getElementById('pmContent').value; if(!content) return;
-            await fetch('/api/messages', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({from: currentUser, to: toUser, content}) }); closeModal(); showMsg('הצלחה', 'נשלח!');
-        }
+        async function sendPM(toUser) { const content = document.getElementById('pmContent').value; if(!content) return; await fetch('/api/messages', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({from: currentUser, to: toUser, content}) }); closeModal(); showMsg('הצלחה', 'נשלח!'); }
 
         window.gotoThread = function(threadId) { closeModal(); openThread(threadId, false); };
         async function showNotifications() {
@@ -197,22 +242,31 @@
         }
 
         async function loadPosts() {
-            postsData = await (await fetch('/api/posts')).json(); // כבר מגיע ממוין מהשרת!
+            postsData = await (await fetch('/api/posts')).json(); 
             const urlThreadId = parseInt(new URLSearchParams(window.location.search).get('thread'));
             if (urlThreadId && postsData.find(p => p.id === urlThreadId)) openThread(urlThreadId, true);
+            else if (!document.getElementById('userProfileView').classList.contains('hidden')) {} // אם בפרופיל, תישאר שם
             else { const currentOpenId = parseInt(document.getElementById('singleThreadView').getAttribute('data-current-id')); if(currentOpenId) openThread(currentOpenId, true); else renderThreads(); }
         }
 
         function renderThreads() {
-            document.getElementById('threadsView').classList.remove('hidden'); document.getElementById('singleThreadView').classList.add('hidden');
+            document.getElementById('threadsView').classList.remove('hidden'); document.getElementById('singleThreadView').classList.add('hidden'); document.getElementById('userProfileView').classList.add('hidden');
             const cat = document.getElementById('categorySelect').value; let filtered = cat ? postsData.filter(p => p.category === cat) : postsData;
             
             document.getElementById('threadsList').innerHTML = filtered.map(p => {
-                const isUnread = p.lastUpdated > (readThreads[p.id] || 0); // בדיקת חדש
+                const isUnread = p.lastUpdated > (readThreads[p.id] || 0);
                 return `
                 <div class="thread-card ${p.isLocked ? 'thread-locked' : ''}" onclick="openThread(${p.id})">
-                    <div class="thread-title">${p.isLocked ? '🔒 ' : ''}${p.title} ${isUnread ? '<span class="unread-badge">(חדש)</span>' : ''}</div>
-                    <div style="font-size: 13px; color: #6B7280; display: flex; justify-content: space-between;"><span>מאת: <strong>${p.author}</strong></span><span>קטגוריה: ${p.category} | תגובות: ${p.replies.length}</span></div>
+                    <div class="thread-title">
+                        ${p.isLocked ? '🔒 ' : ''}
+                        <span class="cat-tag" style="background:${getCatColor(p.category)};">${p.category}</span>
+                        ${p.title} 
+                        ${isUnread ? '<span class="unread-badge">חדש</span>' : ''}
+                    </div>
+                    <div style="font-size: 13px; color: #6B7280; display: flex; justify-content: space-between; margin-top:5px;">
+                        <span>מאת: <strong class="clickable-user" onclick="showUserProfile('${p.author}'); event.stopPropagation();">${p.author}</strong></span>
+                        <span>👁️ צפיות: ${p.views} | 💬 תגובות: ${p.replies.length}</span>
+                    </div>
                 </div>`;
             }).join('');
         }
@@ -221,7 +275,7 @@
 
         async function createThread() {
             const title = document.getElementById('newThreadTitle').value, content = document.getElementById('newThreadContent').value, cat = document.getElementById('categorySelect').value, fileInput = document.getElementById('newThreadFile');
-            if (!title || !content || !cat) return showMsg('שגיאה', 'חובה למלא את הכל.');
+            if (!title || !content || !cat) return showMsg('שגיאה', 'חובה למלא הכל.');
             const fd = new FormData(); fd.append('author', currentUser); fd.append('title', title); fd.append('content', content); fd.append('category', cat);
             if (fileInput.files) { for(let i=0; i<fileInput.files.length; i++) fd.append('attachedFiles', fileInput.files[i]); }
             await fetch('/api/posts', { method: 'POST', body: fd }); toggleNewThreadForm(); document.getElementById('newThreadTitle').value = ''; document.getElementById('newThreadContent').value = ''; fileInput.value = ''; history.pushState({}, '', '/'); loadPosts();
@@ -230,14 +284,14 @@
         function getUserBadge(username) {
             const info = usersInfo[username] || { role: 'user', joinDate: '', totalLikes: 0, isVeteran: false };
             let roleHtml = info.role === 'admin' ? `<span class="badge badge-admin">👑 מנהל</span>` : (info.role === 'mod' ? `<span class="badge badge-mod">🛡️ מפקח</span>` : (info.isVeteran ? `<span class="badge badge-vet">🌟 ותיק</span>` : `<span class="badge badge-user">משתמש</span>`));
-            return `${roleHtml}<br><span style="font-size:11px; color:#6B7280; display:block; margin-top:5px;">הצטרף ב: ${info.joinDate}</span><span style="font-size:11px; color:#EC4899; font-weight:bold;">❤️ לייקים: ${info.totalLikes}</span>${currentUser !== username ? `<br><button class="btn-action" style="margin-top:5px; padding:3px 6px; font-size:10px;" onclick="triggerSendPM('${username}')">✉️ שלח הודעה</button>` : ''}`;
+            return `${roleHtml}<br><span style="font-size:11px; color:#6B7280; display:block; margin-top:5px;">הצטרף: ${info.joinDate}</span>`;
         }
 
         window.insertQuote = function(author, content) { document.getElementById('replyContent').value += `[quote="${author}"]\n${content}\n[/quote]\n\n`; document.getElementById('replyContent').focus(); };
 
         function renderPostBlock(p, replyId = null, isMain = false, parentPost = null) {
             const hasLiked = p.likes.includes(currentUser); const canMod = currentUserRole === 'admin' || currentUserRole === 'mod';
-            const canEdit = canMod || (p.author === currentUser && (Date.now() - p.id < 600000)); // עריכה למחבר עד 10 דקות
+            const canEdit = canMod || (p.author === currentUser && (Date.now() - p.id < 600000)); 
             
             let filesHtml = p.fileUrls && p.fileUrls.length > 0 ? `<div class="file-list" style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">${p.fileUrls.map(url => `<a href="${url}" target="_blank">📎 צפה בקובץ</a>`).join('')}</div>` : '';
             
@@ -247,10 +301,10 @@
             
             return `
             <div class="post-container" id="post-${replyId || p.id}">
-                <div class="user-panel"><strong style="font-size: 17px; color: var(--primary);">${p.author}</strong><br>${getUserBadge(p.author)}</div>
+                <div class="user-panel"><strong class="clickable-user" style="font-size: 17px;" onclick="showUserProfile('${p.author}')">${p.author}</strong><br>${getUserBadge(p.author)}</div>
                 <div class="content-panel">
                     ${isMain ? `<h2 style="margin: 0 0 10px 0; color: var(--text);">${p.isLocked ? '🔒 ' : ''}${p.title}</h2>` : ''}
-                    <div style="font-size: 12px; color: #9CA3AF; margin-bottom: 10px;">פורסם: ${p.date}</div>
+                    <div style="font-size: 12px; color: #9CA3AF; margin-bottom: 10px;">פורסם: ${p.date} ${isMain ? ` | 👁️ צפיות: ${p.views}` : ''}</div>
                     <div style="font-size: 15px; white-space: pre-wrap; line-height: 1.6;">${parseBBCode(p.content)}</div>
                     ${filesHtml}
                     <div style="margin-top: auto; padding-top: 15px; display: flex; gap: 8px; border-top: 1px solid #e5e7eb; flex-wrap: wrap;">
@@ -264,14 +318,21 @@
             </div>`;
         }
 
-        function openThread(id, isRefresh = false) {
+        async function openThread(id, isRefresh = false) {
             const p = postsData.find(x => x.id === id); if (!p) return backToThreads();
-            if (!isRefresh && window.location.search !== `?thread=${id}`) history.pushState({thread: id}, '', '/?thread=' + id);
             
-            // סימון האשכול כנקרא (למניעת התגית האדומה "חדש")
+            // הוספת צפייה בשרת (אם זו כניסה חדשה ולא ריענון)
+            if (!isRefresh && window.location.search !== `?thread=${id}`) {
+                history.pushState({thread: id}, '', '/?thread=' + id);
+                const res = await fetch(`/api/posts/${id}/view`, {method: 'POST'});
+                const data = await res.json();
+                if (data.views) p.views = data.views;
+            }
+            
             readThreads[id] = Date.now(); localStorage.setItem('readThreads', JSON.stringify(readThreads));
 
-            document.getElementById('threadsView').classList.add('hidden'); document.getElementById('singleThreadView').classList.remove('hidden'); document.getElementById('singleThreadView').setAttribute('data-current-id', id);
+            document.getElementById('threadsView').classList.add('hidden'); document.getElementById('userProfileView').classList.add('hidden');
+            document.getElementById('singleThreadView').classList.remove('hidden'); document.getElementById('singleThreadView').setAttribute('data-current-id', id);
             
             const isFollowing = p.followers.includes(currentUser);
             let html = `<div style="display:flex; justify-content:flex-end; margin-bottom:15px;"><button onclick="toggleFollow(${p.id})" style="background: ${isFollowing ? '#6B7280' : '#10B981'};">${isFollowing ? '🔕 בטל מעקב' : '🔔 עקוב'}</button></div>`;
@@ -294,13 +355,10 @@
             if(data.error) showMsg('שגיאה', data.error); else loadPosts();
         }
 
-        async function deleteReply(postId, replyId) {
-            if(confirm('למחוק תגובה זו לצמיתות?')) { await fetch('/api/posts/delete-reply', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, replyId}) }); loadPosts(); }
-        }
-
+        async function deleteReply(postId, replyId) { if(confirm('למחוק תגובה זו לצמיתות?')) { await fetch('/api/posts/delete-reply', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, replyId}) }); loadPosts(); } }
         async function toggleLike(postId, replyId) { const res = await fetch('/api/like', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, replyId}) }); const data = await res.json(); if(data.error) showMsg('שגיאה', data.error); else await initForum(); }
         async function triggerLock(postId) { await fetch('/api/posts/lock', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId}) }); loadPosts(); }
-        function triggerMove(postId) { showInputMsg("לאיזו קטגוריה להעביר?", (val) => submitMove(postId, val)); } // לצורך קיצור הקוד שמתי כפלט טקסט אבל ניתן להחזיר סלקט אם יש מקום
+        function triggerMove(postId) { showInputMsg("לאיזו קטגוריה להעביר?", (val) => submitMove(postId, val)); } 
         async function submitMove(postId, newCategory) { await fetch('/api/posts/move', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, newCategory}) }); showMsg('בוצע', 'הועבר!'); loadPosts(); }
 
         let currentActionPostId, currentActionReplyId;
