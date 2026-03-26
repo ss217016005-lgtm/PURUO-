@@ -4,99 +4,104 @@
     <meta charset="UTF-8">
     <title>פורום פרומרקייט</title>
     <style>
-        :root { --primary: #0056b3; --bg: #f4f6f9; --box-bg: #ffffff; --text: #333; --border: #e1e4e8; }
+        :root { 
+            --primary: #4F46E5; --secondary: #EC4899; --bg: #F3F4F6; 
+            --box-bg: #FFFFFF; --text: #1F2937; --border: #E5E7EB;
+        }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); margin: 0; color: var(--text); }
-        .header { background: var(--primary); color: white; padding: 20px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-        .header h1 { margin: 0; font-size: 28px; letter-spacing: 1px; }
+        .header { background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; padding: 25px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header h1 { margin: 0; font-size: 32px; font-weight: 800; text-shadow: 1px 1px 2px rgba(0,0,0,0.2); }
         .layout { display: flex; max-width: 1200px; margin: 20px auto; gap: 20px; padding: 0 15px; }
         
-        .main-content { flex: 3; background: var(--box-bg); padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); min-height: 500px; }
-        .sidebar { flex: 1; background: var(--box-bg); padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); height: fit-content; }
+        .main-content { flex: 3; background: var(--box-bg); padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .sidebar { flex: 1; background: var(--box-bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); height: fit-content; }
         
         .hidden { display: none !important; }
-        input, textarea, select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid var(--border); border-radius: 5px; box-sizing: border-box; font-family: inherit; }
-        button { background: var(--primary); color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.2s; }
-        button:hover { opacity: 0.9; }
-        .btn-like { background: #f1f1f1; color: #555; border: 1px solid #ccc; font-size: 13px; padding: 5px 10px; }
-        .btn-like.liked { background: #ffebee; color: #e53935; border-color: #ffcdd2; }
+        input, textarea, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; box-sizing: border-box; font-family: inherit; transition: 0.3s; }
+        input:focus, textarea:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2); }
         
-        .thread-card { border: 1px solid var(--border); padding: 15px; border-radius: 8px; margin-bottom: 15px; background: #fafbfc; cursor: pointer; transition: 0.2s; }
-        .thread-card:hover { border-color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        .thread-title { font-size: 18px; font-weight: bold; color: var(--primary); margin-bottom: 5px; }
+        button { background: var(--primary); color: white; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        button:hover { transform: translateY(-1px); box-shadow: 0 4px 6px rgba(79, 70, 229, 0.3); }
         
-        .reply-box { border-top: 1px solid var(--border); margin-top: 15px; padding-top: 15px; }
-        .reply-item { background: #f8f9fa; border: 1px solid var(--border); padding: 15px; border-radius: 8px; margin-bottom: 10px; margin-right: 30px; }
+        .btn-like { background: #f3f4f6; color: #4b5563; border: 1px solid #d1d5db; font-size: 13px; box-shadow: none; }
+        .btn-like.liked { background: #fbcfe8; color: #be185d; border-color: #f9a8d4; }
+        .btn-report { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; font-size: 13px; box-shadow: none; }
+        .btn-mod { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-size: 13px; box-shadow: none; margin-right: 5px; }
         
-        .online-dot { height: 10px; width: 10px; background-color: #28a745; border-radius: 50%; display: inline-block; margin-left: 5px; }
-        .user-list { list-style: none; padding: 0; margin: 0; }
-        .user-list li { padding: 8px 0; border-bottom: 1px solid #eee; font-size: 14px; }
+        .thread-card { border: 1px solid var(--border); padding: 15px; border-radius: 10px; margin-bottom: 15px; background: #ffffff; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; border-right: 4px solid var(--primary); }
+        .thread-card:hover { border-color: var(--primary); transform: translateX(-3px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .thread-title { font-size: 20px; font-weight: bold; color: var(--primary); margin-bottom: 8px; }
+        
+        .reply-box { border-top: 2px dashed var(--border); margin-top: 25px; padding-top: 20px; }
+        .post-container { display: flex; background: #f9fafb; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 15px; overflow: hidden; }
+        
+        .user-panel { background: #f3f4f6; padding: 15px; width: 150px; text-align: center; border-left: 1px solid var(--border); }
+        .content-panel { padding: 15px; flex: 1; display: flex; flex-direction: column; }
+        
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-top: 5px; color: white; }
+        .badge-admin { background: #EF4444; }
+        .badge-mod { background: #F59E0B; }
+        .badge-user { background: #6B7280; }
+        
+        .post-actions { margin-top: auto; padding-top: 15px; display: flex; gap: 10px; border-top: 1px solid #e5e7eb; }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <h1>פורום פרומרקייט</h1>
-        <p style="margin: 5px 0 0 0; font-size: 14px;">הקהילה המקצועית שלנו</p>
+        <h1>✨ פורום פרומרקייט ✨</h1>
+        <p style="margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;">הקהילה המקצועית והאיכותית ברשת</p>
     </div>
 
-    <div id="authSection" style="max-width: 400px; margin: 50px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-        <h2 style="text-align:center; margin-top:0;">התחברות / הרשמה</h2>
+    <div id="authSection" style="max-width: 400px; margin: 50px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+        <h2 style="text-align:center; color: var(--primary);">התחברות לקהילה</h2>
         <input type="text" id="username" placeholder="שם משתמש">
         <input type="password" id="password" placeholder="סיסמה">
-        <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
             <button onclick="login()" style="flex: 1;">התחבר</button>
-            <button onclick="register()" style="flex: 1; background: #28a745;">הרשמה</button>
+            <button onclick="register()" style="flex: 1; background: var(--secondary);">הרשמה</button>
         </div>
     </div>
 
     <div id="forumSection" class="layout hidden">
         <div class="main-content">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 15px; margin-bottom: 20px;">
-                <h2 id="welcomeMsg" style="margin: 0;"></h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 15px; margin-bottom: 20px;">
+                <h2 id="welcomeMsg" style="margin: 0; color: var(--primary);"></h2>
                 <div>
-                    <button id="adminBtn" class="hidden" onclick="window.location.href='/admin.html'" style="background: #28a745; margin-left: 10px;">ניהול</button>
-                    <button onclick="logout()" style="background: #dc3545;">התנתק</button>
+                    <button id="adminBtn" class="hidden" onclick="window.location.href='/admin.html'" style="background: #10B981; margin-left: 10px;">ניהול מערכת</button>
+                    <button onclick="logout()" style="background: #EF4444;">התנתק</button>
                 </div>
             </div>
 
             <div id="threadsView">
                 <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px;">
-                    <select id="categorySelect" onchange="renderThreads()" style="flex: 2; margin: 0;"></select>
-                    <button onclick="toggleNewThreadForm()" style="flex: 1;">+ פתח אשכול חדש</button>
+                    <select id="categorySelect" onchange="renderThreads()" style="flex: 2; margin: 0; font-weight: bold;"></select>
+                    <button onclick="toggleNewThreadForm()" style="flex: 1; background: var(--secondary);">+ פתח אשכול חדש</button>
                 </div>
 
-                <div id="newThreadForm" class="hidden" style="background: #f1f3f5; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <input type="text" id="newThreadTitle" placeholder="כותרת האשכול">
-                    <textarea id="newThreadContent" rows="3" placeholder="תוכן ההודעה..."></textarea>
+                <div id="newThreadForm" class="hidden" style="background: #fdf2f8; border: 1px solid #fbcfe8; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                    <input type="text" id="newThreadTitle" placeholder="כותרת האשכול הרשמית">
+                    <textarea id="newThreadContent" rows="4" placeholder="תוכן ההודעה..."></textarea>
                     <input type="file" id="newThreadFile">
-                    <button onclick="createThread()">פרסם אשכול</button>
+                    <button onclick="createThread()">פרסם אשכול לציבור</button>
                 </div>
 
                 <div id="threadsList"></div>
             </div>
 
             <div id="singleThreadView" class="hidden">
-                <button onclick="backToThreads()" style="background: #6c757d; margin-bottom: 20px;">חזור לרשימת האשכולות</button>
+                <button onclick="backToThreads()" style="background: #6B7280; margin-bottom: 20px;">➔ חזור לרשימת הנושאים</button>
                 <div id="threadContentArea"></div>
             </div>
-        </div>
-
-        <div class="sidebar">
-            <h3 style="margin-top: 0; border-bottom: 2px solid var(--primary); padding-bottom: 10px;">סטטוס קהילה</h3>
-            
-            <p style="font-weight: bold; margin-bottom: 5px;"><span class="online-dot"></span> מחוברים כעת (<span id="onlineCount">0</span>):</p>
-            <ul id="onlineUsersList" class="user-list"></ul>
-            
-            <p style="font-weight: bold; margin-top: 20px; margin-bottom: 5px;">👥 כל החברים הרשומים (<span id="totalUsersCount">0</span>):</p>
-            <ul id="registeredUsersList" class="user-list" style="max-height: 200px; overflow-y: auto;"></ul>
         </div>
     </div>
 
     <script>
         let currentUser = null;
+        let currentUserRole = null;
         let postsData = [];
+        let usersInfo = {};
 
-        // --- התחברות והרשמה ---
         async function register() {
             const u = document.getElementById('username').value, p = document.getElementById('password').value;
             if (!u || !p) return alert('מלא שדות');
@@ -111,40 +116,25 @@
             const data = await res.json();
             if (res.ok) {
                 currentUser = data.username;
+                currentUserRole = data.role;
                 document.getElementById('authSection').classList.add('hidden');
                 document.getElementById('forumSection').classList.remove('hidden');
                 document.getElementById('welcomeMsg').innerText = `שלום, ${currentUser}`;
-                if (data.isAdmin) document.getElementById('adminBtn').classList.remove('hidden');
+                if (currentUserRole === 'admin') document.getElementById('adminBtn').classList.remove('hidden');
                 initForum();
             } else alert(data.error);
         }
 
-        function logout() { currentUser = null; location.reload(); }
+        function logout() { location.reload(); }
 
-        // --- אתחול פורום ---
         async function initForum() {
-            // טעינת קטגוריות
+            usersInfo = await (await fetch('/api/users/info')).json();
             const cats = await (await fetch('/api/categories')).json();
             const select = document.getElementById('categorySelect');
-            select.innerHTML = '<option value="">כל הקטגוריות</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join('');
-            
+            select.innerHTML = '<option value="">🌐 הצג את כל הקטגוריות</option>' + cats.map(c => `<option value="${c}">📁 ${c}</option>`).join('');
             loadPosts();
-            updateOnlineStatus();
-            setInterval(updateOnlineStatus, 30000); // עדכון מחוברים כל 30 שניות
         }
 
-        async function updateOnlineStatus() {
-            if (!currentUser) return;
-            const res = await fetch('/api/ping', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser}) });
-            const data = await res.json();
-            
-            document.getElementById('onlineCount').innerText = data.onlineUsers.length;
-            document.getElementById('onlineUsersList').innerHTML = data.onlineUsers.map(u => `<li>${u}</li>`).join('');
-            document.getElementById('totalUsersCount').innerText = data.registeredUsers.length;
-            document.getElementById('registeredUsersList').innerHTML = data.registeredUsers.map(u => `<li>${u}</li>`).join('');
-        }
-
-        // --- אשכולות ---
         async function loadPosts() {
             postsData = await (await fetch('/api/posts')).json();
             renderThreads();
@@ -153,15 +143,15 @@
         function renderThreads() {
             document.getElementById('threadsView').classList.remove('hidden');
             document.getElementById('singleThreadView').classList.add('hidden');
-            
             const cat = document.getElementById('categorySelect').value;
             let filtered = cat ? postsData.filter(p => p.category === cat) : postsData;
             
             document.getElementById('threadsList').innerHTML = filtered.reverse().map(p => `
                 <div class="thread-card" onclick="openThread(${p.id})">
                     <div class="thread-title">${p.title}</div>
-                    <div style="font-size: 13px; color: #666;">
-                        מאת: <strong>${p.author}</strong> | קטגוריה: ${p.category} | תגובות: ${p.replies.length}
+                    <div style="font-size: 13px; color: #6B7280; display: flex; justify-content: space-between;">
+                        <span>מאת: <strong>${p.author}</strong></span>
+                        <span>קטגוריה: ${p.category} | תגובות: ${p.replies.length}</span>
                     </div>
                 </div>
             `).join('');
@@ -170,59 +160,60 @@
         function toggleNewThreadForm() { document.getElementById('newThreadForm').classList.toggle('hidden'); }
 
         async function createThread() {
-            const title = document.getElementById('newThreadTitle').value;
-            const content = document.getElementById('newThreadContent').value;
-            const cat = document.getElementById('categorySelect').value;
-            const file = document.getElementById('newThreadFile').files[0];
-
-            if (!title || !content || !cat) return alert('חובה לבחור קטגוריה, לכתוב כותרת ותוכן.');
-
+            const title = document.getElementById('newThreadTitle').value, content = document.getElementById('newThreadContent').value, cat = document.getElementById('categorySelect').value;
+            if (!title || !content || !cat) return alert('חובה למלא הכל.');
             const fd = new FormData();
             fd.append('author', currentUser); fd.append('title', title); fd.append('content', content); fd.append('category', cat);
-            if (file) fd.append('attachedFile', file);
-
             await fetch('/api/posts', { method: 'POST', body: fd });
-            toggleNewThreadForm();
-            loadPosts();
+            toggleNewThreadForm(); loadPosts();
         }
 
-        // --- צפייה באשכול ותגובות ---
+        function getUserBadge(username) {
+            const info = usersInfo[username] || { role: 'user', joinDate: 'לא ידוע' };
+            if (info.role === 'admin') return `<span class="badge badge-admin">👑 מנהל ראשי</span><br><span style="font-size:11px; color:#666;">הצטרף: ${info.joinDate}</span>`;
+            if (info.role === 'mod') return `<span class="badge badge-mod">🛡️ צוות פיקוח</span><br><span style="font-size:11px; color:#666;">הצטרף: ${info.joinDate}</span>`;
+            return `<span class="badge badge-user">👤 משתמש</span><br><span style="font-size:11px; color:#666;">הצטרף: ${info.joinDate}</span>`;
+        }
+
+        function renderPostBlock(p, replyId = null, isMain = false) {
+            const hasLiked = p.likes.includes(currentUser);
+            const canMod = currentUserRole === 'admin' || currentUserRole === 'mod';
+            
+            return `
+            <div class="post-container">
+                <div class="user-panel">
+                    <strong style="font-size: 16px; color: var(--primary);">${p.author}</strong><br>
+                    ${getUserBadge(p.author)}
+                </div>
+                <div class="content-panel">
+                    ${isMain ? `<h2 style="margin: 0 0 10px 0; color: var(--text);">${p.title}</h2>` : ''}
+                    <div style="font-size: 12px; color: #9CA3AF; margin-bottom: 10px;">${p.date}</div>
+                    <div style="font-size: 16px; white-space: pre-wrap; line-height: 1.5;">${p.content}</div>
+                    ${p.fileUrl ? `<div style="margin-top: 15px;"><a href="${p.fileUrl}" target="_blank" style="background:#E5E7EB; padding:5px 10px; border-radius:5px; text-decoration:none; color:#374151;">📎 קובץ מצורף</a></div>` : ''}
+                    
+                    <div class="post-actions">
+                        <button class="btn-like ${hasLiked ? 'liked' : ''}" onclick="toggleLike(${isMain ? p.id : replyId}, ${isMain ? 'null' : p.id})">👍 נהניתי (${p.likes.length})</button>
+                        <button class="btn-report" onclick="reportPost(${isMain ? p.id : replyId}, ${isMain ? 'null' : p.id})">🚨 דווח למנהל</button>
+                        ${canMod ? `<button class="btn-mod" onclick="editPost(${isMain ? p.id : replyId}, ${isMain ? 'null' : p.id})">✏️ עריכת הנהלה</button>` : ''}
+                    </div>
+                </div>
+            </div>`;
+        }
+
         function openThread(id) {
-            const p = postsData.find(p => p.id === id);
+            const p = postsData.find(x => x.id === id);
             document.getElementById('threadsView').classList.add('hidden');
             document.getElementById('singleThreadView').classList.remove('hidden');
             
-            const hasLiked = p.likes.includes(currentUser);
-            let html = `
-                <h2 style="color: var(--primary); margin-bottom: 5px;">${p.title}</h2>
-                <div style="font-size: 13px; color: #888; margin-bottom: 15px;">מאת: ${p.author} | ${p.date} | קטגוריה: ${p.category}</div>
-                <div style="font-size: 16px; white-space: pre-wrap;">${p.content}</div>
-                ${p.fileUrl ? `<div style="margin-top: 10px;"><a href="${p.fileUrl}" target="_blank">📎 קובץ מצורף</a></div>` : ''}
-                <div style="margin-top: 15px;">
-                    <button class="btn-like ${hasLiked ? 'liked' : ''}" onclick="toggleLike(${p.id}, null)">👍 נהניתי (${p.likes.length})</button>
-                </div>
-                
-                <h3 style="margin-top: 30px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">תגובות:</h3>
-                <div id="repliesList">
-                    ${p.replies.map(r => {
-                        const rLiked = r.likes.includes(currentUser);
-                        return `
-                        <div class="reply-item">
-                            <div style="font-size: 12px; color: #666; margin-bottom: 5px;"><strong>${r.author}</strong> - ${r.date}</div>
-                            <div style="white-space: pre-wrap;">${r.content}</div>
-                            ${r.fileUrl ? `<div><a href="${r.fileUrl}" target="_blank">📎 קובץ</a></div>` : ''}
-                            <div style="margin-top: 10px;">
-                                <button class="btn-like ${rLiked ? 'liked' : ''}" onclick="toggleLike(${p.id}, ${r.id})">👍 נהניתי (${r.likes.length})</button>
-                            </div>
-                        </div>`;
-                    }).join('')}
-                </div>
-
+            let html = renderPostBlock(p, null, true);
+            html += `<h3 style="margin-top: 30px; border-bottom: 2px solid var(--primary); padding-bottom: 5px; display:inline-block;">💬 תגובות לאשכול:</h3>`;
+            html += `<div id="repliesList" style="margin-top:15px;">${p.replies.map(r => renderPostBlock(r, p.id, false)).join('')}</div>`;
+            
+            html += `
                 <div class="reply-box">
-                    <h4>הוסף תגובה:</h4>
-                    <textarea id="replyContent" rows="3" placeholder="כתוב את תגובתך כאן..."></textarea>
-                    <input type="file" id="replyFile">
-                    <button onclick="addReply(${p.id})">שלח תגובה</button>
+                    <h4 style="margin-top:0;">הוסף תגובה משלך:</h4>
+                    <textarea id="replyContent" rows="3" placeholder="כתוב את תגובתך בכבוד הראוי..."></textarea>
+                    <button onclick="addReply(${p.id})">שלח תגובה לאשכול</button>
                 </div>
             `;
             document.getElementById('threadContentArea').innerHTML = html;
@@ -232,22 +223,32 @@
 
         async function addReply(postId) {
             const content = document.getElementById('replyContent').value;
-            const file = document.getElementById('replyFile').files[0];
             if (!content) return alert('לא ניתן לשלוח תגובה ריקה');
-
             const fd = new FormData();
             fd.append('author', currentUser); fd.append('content', content);
-            if (file) fd.append('attachedFile', file);
-
             await fetch(`/api/posts/${postId}/reply`, { method: 'POST', body: fd });
-            await loadPosts();
-            openThread(postId); // רענון האשכול הפתוח
+            await loadPosts(); openThread(postId);
         }
 
         async function toggleLike(postId, replyId) {
-            await fetch('/api/like', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, replyId}) });
-            await loadPosts();
-            openThread(postId);
+            const res = await fetch('/api/like', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, replyId}) });
+            const data = await res.json();
+            if(data.error) { alert(data.error); return; }
+            await loadPosts(); openThread(postId || replyId); // logic handling based on call
+        }
+
+        async function reportPost(postId, replyId) {
+            const reason = prompt("מה סיבת הדיווח? (יועבר ישירות לצוות ההנהלה)");
+            if (!reason) return;
+            await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({reporter: currentUser, postId, replyId, reason}) });
+            alert("תודה. הדיווח נשלח לצוות הפיקוח בהצלחה.");
+        }
+
+        async function editPost(postId, replyId) {
+            const newContent = prompt("הזן תוכן חדש (עריכת הנהלה):");
+            if (!newContent) return;
+            await fetch('/api/posts/edit', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, replyId, newContent}) });
+            await loadPosts(); openThread(postId || replyId);
         }
     </script>
 </body>
