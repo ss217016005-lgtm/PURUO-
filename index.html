@@ -1,0 +1,32 @@
+<script>
+    async function loadPosts() {
+        const response = await fetch('/api/posts');
+        const posts = await response.json();
+        const container = document.getElementById('postsContainer');
+        container.innerHTML = posts.map(post => `
+            <div class="post">
+                <div class="post-author">${post.author}</div>
+                <div class="post-date">${post.date}</div>
+                <div class="post-content">${post.content}</div>
+            </div>
+        `).reverse().join(''); // הצגת החדשים למעלה
+    }
+
+    async function addPost() {
+        const author = document.getElementById('authorInput').value;
+        const content = document.getElementById('contentInput').value;
+        if(!author || !content) return alert("נא למלא שדות");
+
+        await fetch('/api/posts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ author, content })
+        });
+
+        document.getElementById('authorInput').value = '';
+        document.getElementById('contentInput').value = '';
+        loadPosts();
+    }
+
+    window.onload = loadPosts;
+</script>
