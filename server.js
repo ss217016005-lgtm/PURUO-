@@ -41,10 +41,10 @@ function initDB() {
         dbCache.posts.forEach(post => { 
             if (!post.followers) { post.followers = [post.author]; needsSave = true; } 
             if (post.isLocked === undefined) { post.isLocked = false; needsSave = true; }
-            if (!post.lastUpdated) { post.lastUpdated = post.id; needsSave = true; } // הקפצות
-            if (post.fileUrl) { post.fileUrls = [post.fileUrl]; delete post.fileUrl; needsSave = true; } // המרה למרובים
+            if (!post.lastUpdated) { post.lastUpdated = post.id; needsSave = true; }
+            if (post.views === undefined) { post.views = 0; needsSave = true; } // שדרוג: ספירת צפיות
+            if (post.fileUrl) { post.fileUrls = [post.fileUrl]; delete post.fileUrl; needsSave = true; }
             if (!post.fileUrls) { post.fileUrls = []; needsSave = true; }
-            
             post.replies.forEach(r => {
                 if (r.fileUrl) { r.fileUrls = [r.fileUrl]; delete r.fileUrl; needsSave = true; }
                 if (!r.fileUrls) { r.fileUrls = []; needsSave = true; }
@@ -68,9 +68,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-app.use(express.json());
-app.use(express.static(__dirname));
-app.use('/uploads', express.static(UPLOADS_DIR));
+app.use(express.json()); app.use(express.static(__dirname)); app.use('/uploads', express.static(UPLOADS_DIR));
 
 function isVeteran(user) { return (user.role === 'admin' || user.role === 'mod' || user.veteranProgress >= 10); }
 
@@ -82,7 +80,7 @@ function notifyMentions(content, author, postTitle, threadId, db) {
     });
 }
 
-// === משתמשים והתחברות ===
+// === משתמשים ===
 app.post('/api/register', (req, res) => {
     const { username, password } = req.body; const db = readDB();
     if (db.users.find(u => u.username === username)) return res.status(400).json({ error: "שם המשתמש כבר קיים." });
@@ -101,17 +99,16 @@ app.post('/api/login', (req, res) => {
 
 app.get('/api/users/info', (req, res) => {
     const db = readDB(); const info = {};
-    db.users.forEach(u => { info[u.username] = { role: u.role || 'user', joinDate: u.joinDate || '', totalLikes: u.totalLikes || 0, isVeteran: isVeteran(u) }; });
+    db.users.forEach(u => { info[u.username] = { role: u.role || 'user', joinDate: u.joinDate || '', totalLikes: u.totalLikes || 0, isVeteran: isVeteran(u), lastSeen: u.lastSeen }; });
     res.json(info);
 });
 
-// === מחוברים, התראות והודעות פרטיות ===
 app.post('/api/ping', (req, res) => {
     const { username } = req.body; const db = readDB(); let unreadCount = 0, unreadMessages = 0;
     if (username) {
         const user = db.users.find(u => u.username === username);
         if (user) {
-            const now = Date.now(); if (now - user.lastActive > 432000000) user.veteranProgress = 0; // איפוס אחרי 5 ימים (באלפיות שנייה)
+            const now = Date.now(); if (now - user.lastActive > 432000000) user.veteranProgress = 0; 
             user.lastSeen = now; user.lastActive = now;
             unreadCount = user.notifications ? user.notifications.length : 0;
             unreadMessages = db.messages.filter(m => m.to === username && !m.read).length;
@@ -129,33 +126,35 @@ app.post('/api/notifications/clear', (req, res) => {
     res.json({ notifications: myNotifs });
 });
 
+// === הודעות פרטיות ===
 app.get('/api/messages/:username', (req, res) => {
     const db = readDB(); const msgs = db.messages.filter(m => m.to === req.params.username).reverse();
     msgs.forEach(m => m.read = true); writeDB(db); res.json(msgs);
 });
-
 app.post('/api/messages', (req, res) => {
     const { from, to, content } = req.body; const db = readDB();
     const sender = db.users.find(u => u.username === from), receiver = db.users.find(u => u.username === to);
     if (!receiver) return res.status(404).json({ error: "משתמש לא קיים." });
-    if (!isVeteran(sender)) return res.status(403).json({ error: "רק משתמש ותיק יכול לשלוח פרטיות." });
+    if (!isVeteran(sender)) return res.status(403).json({ error: "רק 'משתמש ותיק' יכול לשלוח פרטיות." });
     db.messages.push({ id: Date.now(), from, to, content, date: new Date().toLocaleString('he-IL'), read: false });
     if (receiver) receiver.notifications.push({ text: `קיבלת הודעה פרטית מ-${from}!`, threadId: null });
     writeDB(db); res.json({ success: true });
 });
 
-// === פוסטים, העלאת מרובים והקפצות ===
+// === פוסטים (פורום) ===
 app.get('/api/categories', (req, res) => res.json(readDB().categories));
-app.get('/api/posts', (req, res) => {
-    // שליחת הפוסטים ממוינים לפי זמן עדכון אחרון
-    const posts = readDB().posts.sort((a, b) => b.lastUpdated - a.lastUpdated);
-    res.json(posts);
+app.get('/api/posts', (req, res) => { res.json(readDB().posts.sort((a, b) => b.lastUpdated - a.lastUpdated)); });
+
+// ספירת צפיות
+app.post('/api/posts/:id/view', (req, res) => {
+    const db = readDB(); const post = db.posts.find(p => p.id === parseInt(req.params.id));
+    if (post) { post.views = (post.views || 0) + 1; writeDB(db); res.json({ views: post.views }); } else res.status(404).json({ error: "לא נמצא" });
 });
 
 app.post('/api/posts', upload.array('attachedFiles', 5), (req, res) => {
     const { author, title, content, category } = req.body; const db = readDB();
     const fileUrls = req.files ? req.files.map(f => `/uploads/${f.filename}`) : [];
-    const newPost = { id: Date.now(), lastUpdated: Date.now(), author, title, category, content, date: new Date().toLocaleString('he-IL'), fileUrls, likes: [], replies: [], followers: [author], isLocked: false };
+    const newPost = { id: Date.now(), lastUpdated: Date.now(), views: 0, author, title, category, content, date: new Date().toLocaleString('he-IL'), fileUrls, likes: [], replies: [], followers: [author], isLocked: false };
     db.posts.push(newPost); notifyMentions(content, author, title, newPost.id, db); 
     writeDB(db); res.status(201).json(newPost);
 });
@@ -177,7 +176,7 @@ app.post('/api/posts/:id/reply', upload.array('attachedFiles', 5), (req, res) =>
     const fileUrls = req.files ? req.files.map(f => `/uploads/${f.filename}`) : [];
     const newReply = { id: Date.now(), author, content, date: new Date().toLocaleString('he-IL'), fileUrls, likes: [] };
     post.replies.push(newReply);
-    post.lastUpdated = Date.now(); // הקפצת האשכול
+    post.lastUpdated = Date.now();
 
     post.followers.forEach(follower => {
         if (follower !== author) {
@@ -189,18 +188,14 @@ app.post('/api/posts/:id/reply', upload.array('attachedFiles', 5), (req, res) =>
     writeDB(db); res.status(201).json(newReply);
 });
 
-// === עריכה, מחיקות, לייקים ===
-app.delete('/api/posts/:id', (req, res) => {
-    const db = readDB(); db.posts = db.posts.filter(p => p.id !== parseInt(req.params.id)); writeDB(db); res.json({ success: true });
-});
-
+// === מחיקה, לייק ועריכה ===
+app.delete('/api/posts/:id', (req, res) => { const db = readDB(); db.posts = db.posts.filter(p => p.id !== parseInt(req.params.id)); writeDB(db); res.json({ success: true }); });
 app.post('/api/posts/delete-reply', (req, res) => {
     const { username, postId, replyId } = req.body; const db = readDB();
     const user = db.users.find(u => u.username === username);
-    if (!user || user.role !== 'admin') return res.status(403).json({ error: "רק מנהל יכול למחוק תגובות." });
+    if (!user || user.role !== 'admin') return res.status(403).json({ error: "רק מנהל יכול למחוק." });
     const post = db.posts.find(p => p.id === postId);
-    if (post) { post.replies = post.replies.filter(r => r.id !== replyId); writeDB(db); }
-    res.json({ success: true });
+    if (post) { post.replies = post.replies.filter(r => r.id !== replyId); writeDB(db); } res.json({ success: true });
 });
 
 app.post('/api/like', (req, res) => {
@@ -208,7 +203,7 @@ app.post('/api/like', (req, res) => {
     const post = db.posts.find(p => p.id === postId);
     if (!post) return res.status(404).json({ error: "לא נמצא" });
     let target = replyId ? post.replies.find(r => r.id === replyId) : post;
-    if (target.author === username) return res.status(400).json({ error: "אי אפשר לעשות לייק לעצמך! 😊" });
+    if (target.author === username) return res.status(400).json({ error: "לייק עצמי חסום! 😊" });
 
     const targetUser = db.users.find(u => u.username === target.author);
     const likeIndex = target.likes.indexOf(username);
@@ -224,23 +219,19 @@ app.put('/api/posts/edit', (req, res) => {
     let target = replyId ? post.replies.find(r => r.id === replyId) : post;
     if (!target) return res.status(404).json({ error: "לא נמצא" });
 
-    // מנהלים או כותב ההודעה אם עברו פחות מ-10 דקות (600,000 אלפיות שנייה)
     const isAuthorInTime = (target.author === username && (Date.now() - target.id < 600000));
     if (!user || (user.role !== 'admin' && user.role !== 'mod' && !isAuthorInTime)) return res.status(403).json({ error: "אין הרשאה או שעברו 10 דקות." });
-
-    target.content = newContent + `\n\n[נערך לאחרונה]`;
-    writeDB(db); res.json({ success: true });
+    target.content = newContent + `\n\n[נערך לאחרונה]`; writeDB(db); res.json({ success: true });
 });
 
 // === מנהלים ===
 app.put('/api/posts/move', (req, res) => {
     const { username, postId, newCategory } = req.body; const db = readDB();
     const user = db.users.find(u => u.username === username);
-    if (!user || user.role !== 'admin') return res.status(403).json({ error: "רק מנהל יכול להעביר אשכולות." });
+    if (!user || user.role !== 'admin') return res.status(403).json({ error: "אין הרשאה." });
     const post = db.posts.find(p => p.id === postId);
-    if (post) { post.category = newCategory; writeDB(db); res.json({ success: true }); } else res.status(404).json({ error: "אשכול לא נמצא." });
+    if (post) { post.category = newCategory; writeDB(db); res.json({ success: true }); } else res.status(404).json({ error: "לא נמצא." });
 });
-
 app.put('/api/posts/lock', (req, res) => {
     const { username, postId } = req.body; const db = readDB();
     const user = db.users.find(u => u.username === username);
@@ -248,7 +239,6 @@ app.put('/api/posts/lock', (req, res) => {
     const post = db.posts.find(p => p.id === postId);
     if (post) { post.isLocked = !post.isLocked; writeDB(db); res.json({ success: true }); } else res.status(404).json({ error: "לא נמצא." });
 });
-
 app.post('/api/report', (req, res) => {
     const { reporter, postId, replyId, reason } = req.body; const db = readDB();
     if (!db.reports) db.reports = []; db.reports.push({ id: Date.now(), reporter, postId, replyId, reason, date: new Date().toLocaleString('he-IL') }); writeDB(db); res.json({ success: true });
