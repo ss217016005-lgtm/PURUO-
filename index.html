@@ -4,57 +4,51 @@
     <meta charset="UTF-8">
     <title>פורום פרומרקייט</title>
     <style>
-        :root { 
-            --primary: #4F46E5; --secondary: #EC4899; --bg: #F3F4F6; 
-            --box-bg: #FFFFFF; --text: #1F2937; --border: #E5E7EB;
-        }
+        :root { --primary: #4F46E5; --secondary: #EC4899; --bg: #F3F4F6; --box-bg: #FFFFFF; --text: #1F2937; --border: #E5E7EB; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); margin: 0; color: var(--text); }
         .header { background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; padding: 25px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .header h1 { margin: 0; font-size: 32px; font-weight: 800; text-shadow: 1px 1px 2px rgba(0,0,0,0.2); }
-        .layout { display: flex; max-width: 1200px; margin: 20px auto; gap: 20px; padding: 0 15px; }
+        .header h1 { margin: 0; font-size: 32px; font-weight: 800; }
+        .nav-bar { background: #374151; color: white; padding: 10px 20px; display: flex; justify-content: center; gap: 20px; }
+        .nav-btn { background: none; border: none; color: white; font-size: 16px; cursor: pointer; padding: 5px 10px; border-radius: 5px; }
+        .nav-btn:hover { background: #4B5563; }
+        .badge-count { background: #EF4444; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; margin-right: 5px; }
         
+        .layout { display: flex; max-width: 1200px; margin: 20px auto; gap: 20px; padding: 0 15px; }
         .main-content { flex: 3; background: var(--box-bg); padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
         .sidebar { flex: 1; background: var(--box-bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); height: fit-content; }
         
         .hidden { display: none !important; }
-        input, textarea, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; box-sizing: border-box; font-family: inherit; transition: 0.3s; }
-        input:focus, textarea:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2); }
+        input, textarea, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; box-sizing: border-box; }
+        button { background: var(--primary); color: white; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .btn-action { background: #f3f4f6; color: #4b5563; border: 1px solid #d1d5db; font-size: 13px; margin-right: 5px; }
+        .btn-action.liked { background: #fbcfe8; color: #be185d; border-color: #f9a8d4; }
         
-        button { background: var(--primary); color: white; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; }
-        button:hover { transform: translateY(-1px); box-shadow: 0 4px 6px rgba(79, 70, 229, 0.3); }
-        
-        .btn-like { background: #f3f4f6; color: #4b5563; border: 1px solid #d1d5db; font-size: 13px; box-shadow: none; }
-        .btn-like.liked { background: #fbcfe8; color: #be185d; border-color: #f9a8d4; }
-        .btn-report { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; font-size: 13px; box-shadow: none; }
-        .btn-mod { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-size: 13px; box-shadow: none; margin-right: 5px; }
-        
-        .thread-card { border: 1px solid var(--border); padding: 15px; border-radius: 10px; margin-bottom: 15px; background: #ffffff; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; border-right: 4px solid var(--primary); }
-        .thread-card:hover { border-color: var(--primary); transform: translateX(-3px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        .thread-title { font-size: 20px; font-weight: bold; color: var(--primary); margin-bottom: 8px; }
-        
-        .reply-box { border-top: 2px dashed var(--border); margin-top: 25px; padding-top: 20px; }
+        .thread-card { border: 1px solid var(--border); padding: 15px; border-radius: 10px; margin-bottom: 15px; background: #ffffff; cursor: pointer; border-right: 4px solid var(--primary); }
         .post-container { display: flex; background: #f9fafb; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 15px; overflow: hidden; }
-        
-        .user-panel { background: #f3f4f6; padding: 15px; width: 150px; text-align: center; border-left: 1px solid var(--border); }
+        .user-panel { background: #f3f4f6; padding: 15px; width: 130px; text-align: center; border-left: 1px solid var(--border); }
         .content-panel { padding: 15px; flex: 1; display: flex; flex-direction: column; }
-        
         .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-top: 5px; color: white; }
-        .badge-admin { background: #EF4444; }
-        .badge-mod { background: #F59E0B; }
-        .badge-user { background: #6B7280; }
         
-        .post-actions { margin-top: auto; padding-top: 15px; display: flex; gap: 10px; border-top: 1px solid #e5e7eb; }
+        .pm-card, .notif-card { border: 1px solid var(--border); padding: 10px; border-radius: 5px; margin-bottom: 10px; background: #f9fafb; }
+        .quote-block { border-right: 3px solid var(--primary); background: #e0e7ff; padding: 10px; margin-bottom: 10px; border-radius: 4px; font-style: italic; }
     </style>
 </head>
 <body>
 
     <div class="header">
         <h1>✨ פורום פרומרקייט ✨</h1>
-        <p style="margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;">הקהילה המקצועית והאיכותית ברשת</p>
+    </div>
+
+    <div id="navBar" class="nav-bar hidden">
+        <button class="nav-btn" onclick="showView('threadsView')">🏠 ראשי</button>
+        <button class="nav-btn" onclick="showView('pmsView')">✉️ הודעות פרטיות</button>
+        <button class="nav-btn" onclick="showView('notifView')">🔔 התראות <span id="notifBadge" class="badge-count hidden">0</span></button>
+        <button id="adminBtn" class="nav-btn hidden" style="color: #10B981;" onclick="window.location.href='/admin.html'">⚙️ פאנל ניהול</button>
+        <button class="nav-btn" style="color: #EF4444;" onclick="logout()">🚪 התנתק</button>
     </div>
 
     <div id="authSection" style="max-width: 400px; margin: 50px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
-        <h2 style="text-align:center; color: var(--primary);">התחברות לקהילה</h2>
+        <h2 style="text-align:center;">התחברות לפורום</h2>
         <input type="text" id="username" placeholder="שם משתמש">
         <input type="password" id="password" placeholder="סיסמה">
         <div style="display: flex; gap: 10px; margin-top: 15px;">
@@ -65,60 +59,69 @@
 
     <div id="forumSection" class="layout hidden">
         <div class="main-content">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 15px; margin-bottom: 20px;">
-                <h2 id="welcomeMsg" style="margin: 0; color: var(--primary);"></h2>
-                <div>
-                    <button id="adminBtn" class="hidden" onclick="window.location.href='/admin.html'" style="background: #10B981; margin-left: 10px;">ניהול מערכת</button>
-                    <button onclick="logout()" style="background: #EF4444;">התנתק</button>
-                </div>
-            </div>
+            <h2 id="welcomeMsg" style="margin-top: 0; color: var(--primary);"></h2>
 
-            <div id="threadsView">
-                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px;">
-                    <select id="categorySelect" onchange="renderThreads()" style="flex: 2; margin: 0; font-weight: bold;"></select>
-                    <button onclick="toggleNewThreadForm()" style="flex: 1; background: var(--secondary);">+ פתח אשכול חדש</button>
+            <div id="threadsView" class="view-section">
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <select id="categorySelect" onchange="renderThreads()" style="flex: 2; font-weight: bold;"></select>
+                    <button onclick="document.getElementById('newThreadForm').classList.toggle('hidden')" style="flex: 1;">+ אשכול חדש</button>
                 </div>
-
-                <div id="newThreadForm" class="hidden" style="background: #fdf2f8; border: 1px solid #fbcfe8; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-                    <input type="text" id="newThreadTitle" placeholder="כותרת האשכול הרשמית">
-                    <textarea id="newThreadContent" rows="4" placeholder="תוכן ההודעה..."></textarea>
-                    <input type="file" id="newThreadFile">
-                    <button onclick="createThread()">פרסם אשכול לציבור</button>
+                <div id="newThreadForm" class="hidden" style="background: #fdf2f8; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                    <input type="text" id="newThreadTitle" placeholder="כותרת...">
+                    <textarea id="newThreadContent" rows="3" placeholder="תוכן..."></textarea>
+                    <button onclick="createThread()">פרסם לציבור</button>
                 </div>
-
                 <div id="threadsList"></div>
             </div>
 
-            <div id="singleThreadView" class="hidden">
-                <button onclick="backToThreads()" style="background: #6B7280; margin-bottom: 20px;">➔ חזור לרשימת הנושאים</button>
+            <div id="singleThreadView" class="view-section hidden">
+                <button onclick="showView('threadsView')" style="background: #6B7280; margin-bottom: 20px;">➔ חזור</button>
                 <div id="threadContentArea"></div>
             </div>
+
+            <div id="pmsView" class="view-section hidden">
+                <h3>✉️ תיבת הודעות פרטיות</h3>
+                <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4>שלח הודעה חדשה:</h4>
+                    <input type="text" id="pmTo" placeholder="שם המשתמש של הנמען...">
+                    <textarea id="pmContent" rows="3" placeholder="תוכן ההודעה..."></textarea>
+                    <button onclick="sendPM()">שלח הודעה פרטית</button>
+                </div>
+                <div id="pmsList"></div>
+            </div>
+
+            <div id="notifView" class="view-section hidden">
+                <h3>🔔 ההתראות שלי</h3>
+                <button onclick="markNotificationsRead()" style="margin-bottom: 15px; background: #6B7280;">סמן הכל כנקרא</button>
+                <div id="notifList"></div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <h3 style="margin-top: 0; border-bottom: 2px solid var(--primary);">סטטוס קהילה</h3>
+            <p style="font-weight: bold;">🟢 מחוברים כעת:</p>
+            <ul id="onlineUsersList" style="list-style: none; padding: 0;"></ul>
         </div>
     </div>
 
     <script>
-        let currentUser = null;
-        let currentUserRole = null;
-        let postsData = [];
-        let usersInfo = {};
+        let currentUser = null, currentUserRole = null, postsData = [], usersInfo = {};
 
         async function register() {
             const u = document.getElementById('username').value, p = document.getElementById('password').value;
-            if (!u || !p) return alert('מלא שדות');
             const res = await fetch('/api/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: u, password: p}) });
             alert((await res.json()).message || "שגיאה");
         }
 
         async function login() {
             const u = document.getElementById('username').value, p = document.getElementById('password').value;
-            if (!u || !p) return alert('מלא שדות');
             const res = await fetch('/api/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: u, password: p}) });
             const data = await res.json();
             if (res.ok) {
-                currentUser = data.username;
-                currentUserRole = data.role;
+                currentUser = data.username; currentUserRole = data.role;
                 document.getElementById('authSection').classList.add('hidden');
                 document.getElementById('forumSection').classList.remove('hidden');
+                document.getElementById('navBar').classList.remove('hidden');
                 document.getElementById('welcomeMsg').innerText = `שלום, ${currentUser}`;
                 if (currentUserRole === 'admin') document.getElementById('adminBtn').classList.remove('hidden');
                 initForum();
@@ -127,74 +130,85 @@
 
         function logout() { location.reload(); }
 
+        function showView(viewId) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(viewId).classList.remove('hidden');
+            if(viewId === 'pmsView') loadPMs();
+            if(viewId === 'notifView') loadNotifications();
+        }
+
         async function initForum() {
             usersInfo = await (await fetch('/api/users/info')).json();
             const cats = await (await fetch('/api/categories')).json();
-            const select = document.getElementById('categorySelect');
-            select.innerHTML = '<option value="">🌐 הצג את כל הקטגוריות</option>' + cats.map(c => `<option value="${c}">📁 ${c}</option>`).join('');
-            loadPosts();
+            document.getElementById('categorySelect').innerHTML = '<option value="">🌐 כל הקטגוריות</option>' + cats.map(c => `<option value="${c}">📁 ${c}</option>`).join('');
+            loadPosts(); updateStatus(); setInterval(updateStatus, 15000);
         }
 
-        async function loadPosts() {
-            postsData = await (await fetch('/api/posts')).json();
-            renderThreads();
+        async function updateStatus() {
+            const res = await fetch('/api/ping', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser}) });
+            const data = await res.json();
+            document.getElementById('onlineUsersList').innerHTML = data.onlineUsers.map(u => `<li>${u}</li>`).join('');
+            
+            // עדכון מונה התראות
+            const notifs = await (await fetch(`/api/notifications/${currentUser}`)).json();
+            const unread = notifs.filter(n => !n.read).length;
+            const badge = document.getElementById('notifBadge');
+            if (unread > 0) { badge.innerText = unread; badge.classList.remove('hidden'); } 
+            else badge.classList.add('hidden');
         }
+
+        async function loadPosts() { postsData = await (await fetch('/api/posts')).json(); renderThreads(); }
 
         function renderThreads() {
-            document.getElementById('threadsView').classList.remove('hidden');
-            document.getElementById('singleThreadView').classList.add('hidden');
             const cat = document.getElementById('categorySelect').value;
             let filtered = cat ? postsData.filter(p => p.category === cat) : postsData;
-            
             document.getElementById('threadsList').innerHTML = filtered.reverse().map(p => `
-                <div class="thread-card" onclick="openThread(${p.id})">
-                    <div class="thread-title">${p.title}</div>
-                    <div style="font-size: 13px; color: #6B7280; display: flex; justify-content: space-between;">
-                        <span>מאת: <strong>${p.author}</strong></span>
-                        <span>קטגוריה: ${p.category} | תגובות: ${p.replies.length}</span>
-                    </div>
-                </div>
-            `).join('');
+                <div class="thread-card" onclick="showView('singleThreadView'); openThread(${p.id});">
+                    <div style="font-size: 20px; font-weight: bold; color: var(--primary);">${p.title}</div>
+                    <div style="font-size: 13px; color: #6B7280;">מאת: ${p.author} | תגובות: ${p.replies.length}</div>
+                </div>`).join('');
         }
-
-        function toggleNewThreadForm() { document.getElementById('newThreadForm').classList.toggle('hidden'); }
 
         async function createThread() {
             const title = document.getElementById('newThreadTitle').value, content = document.getElementById('newThreadContent').value, cat = document.getElementById('categorySelect').value;
-            if (!title || !content || !cat) return alert('חובה למלא הכל.');
-            const fd = new FormData();
-            fd.append('author', currentUser); fd.append('title', title); fd.append('content', content); fd.append('category', cat);
+            const fd = new FormData(); fd.append('author', currentUser); fd.append('title', title); fd.append('content', content); fd.append('category', cat);
             await fetch('/api/posts', { method: 'POST', body: fd });
-            toggleNewThreadForm(); loadPosts();
+            document.getElementById('newThreadForm').classList.add('hidden'); loadPosts();
         }
 
-        function getUserBadge(username) {
-            const info = usersInfo[username] || { role: 'user', joinDate: 'לא ידוע' };
-            if (info.role === 'admin') return `<span class="badge badge-admin">👑 מנהל ראשי</span><br><span style="font-size:11px; color:#666;">הצטרף: ${info.joinDate}</span>`;
-            if (info.role === 'mod') return `<span class="badge badge-mod">🛡️ צוות פיקוח</span><br><span style="font-size:11px; color:#666;">הצטרף: ${info.joinDate}</span>`;
-            return `<span class="badge badge-user">👤 משתמש</span><br><span style="font-size:11px; color:#666;">הצטרף: ${info.joinDate}</span>`;
+        function getUserBadge(u) {
+            const info = usersInfo[u] || { role: 'user', joinDate: 'לא ידוע' };
+            const colors = { admin: '#EF4444', mod: '#F59E0B', user: '#6B7280' };
+            const labels = { admin: '👑 מנהל ראשי', mod: '🛡️ פיקוח', user: '👤 משתמש' };
+            return `<span class="badge" style="background:${colors[info.role]}">${labels[info.role]}</span><br><span style="font-size:11px; color:#666;">הצטרף: ${info.joinDate}</span>`;
+        }
+
+        function formatContent(text) {
+            // זיהוי ציטוטים ועיצובם
+            return text.replace(/\[ציטוט מאת (.*?)\]:\n(.*?)\n\n/gs, '<div class="quote-block"><strong>ציטוט מאת $1:</strong><br>$2</div>');
+        }
+
+        function quotePost(author, content) {
+            const replyBox = document.getElementById('replyContent');
+            replyBox.value += `[ציטוט מאת ${author}]:\n${content}\n\n`;
+            replyBox.focus(); replyBox.scrollIntoView({behavior: 'smooth'});
         }
 
         function renderPostBlock(p, replyId = null, isMain = false) {
             const hasLiked = p.likes.includes(currentUser);
             const canMod = currentUserRole === 'admin' || currentUserRole === 'mod';
-            
             return `
             <div class="post-container">
-                <div class="user-panel">
-                    <strong style="font-size: 16px; color: var(--primary);">${p.author}</strong><br>
-                    ${getUserBadge(p.author)}
-                </div>
+                <div class="user-panel"><strong>${p.author}</strong><br>${getUserBadge(p.author)}</div>
                 <div class="content-panel">
-                    ${isMain ? `<h2 style="margin: 0 0 10px 0; color: var(--text);">${p.title}</h2>` : ''}
-                    <div style="font-size: 12px; color: #9CA3AF; margin-bottom: 10px;">${p.date}</div>
-                    <div style="font-size: 16px; white-space: pre-wrap; line-height: 1.5;">${p.content}</div>
-                    ${p.fileUrl ? `<div style="margin-top: 15px;"><a href="${p.fileUrl}" target="_blank" style="background:#E5E7EB; padding:5px 10px; border-radius:5px; text-decoration:none; color:#374151;">📎 קובץ מצורף</a></div>` : ''}
-                    
-                    <div class="post-actions">
-                        <button class="btn-like ${hasLiked ? 'liked' : ''}" onclick="toggleLike(${isMain ? p.id : replyId}, ${isMain ? 'null' : p.id})">👍 נהניתי (${p.likes.length})</button>
-                        <button class="btn-report" onclick="reportPost(${isMain ? p.id : replyId}, ${isMain ? 'null' : p.id})">🚨 דווח למנהל</button>
-                        ${canMod ? `<button class="btn-mod" onclick="editPost(${isMain ? p.id : replyId}, ${isMain ? 'null' : p.id})">✏️ עריכת הנהלה</button>` : ''}
+                    ${isMain ? `<h2 style="margin:0 0 10px 0;">${p.title}</h2>` : ''}
+                    <div style="font-size:12px; color:#9CA3AF; margin-bottom:10px;">${p.date}</div>
+                    <div style="white-space: pre-wrap; line-height: 1.5;">${formatContent(p.content)}</div>
+                    <div style="margin-top: auto; padding-top: 15px; display: flex; gap: 5px;">
+                        <button class="btn-action ${hasLiked ? 'liked' : ''}" onclick="toggleLike(${isMain ? p.id : replyId}, ${isMain ? 'null' : p.id})">👍 נהניתי (${p.likes.length})</button>
+                        <button class="btn-action" onclick="quotePost('${p.author}', \`${p.content.replace(/`/g, '\\`')}\`)">💬 צטט</button>
+                        <button class="btn-action" onclick="reportPost(${isMain ? p.id : replyId}, ${isMain ? 'null' : p.id})">🚨 דווח</button>
+                        ${canMod ? `<button class="btn-action" style="color:#b45309;" onclick="editPost(${isMain ? p.id : replyId}, ${isMain ? 'null' : p.id})">✏️ עריכת הנהלה</button>` : ''}
                     </div>
                 </div>
             </div>`;
@@ -202,53 +216,64 @@
 
         function openThread(id) {
             const p = postsData.find(x => x.id === id);
-            document.getElementById('threadsView').classList.add('hidden');
-            document.getElementById('singleThreadView').classList.remove('hidden');
-            
-            let html = renderPostBlock(p, null, true);
-            html += `<h3 style="margin-top: 30px; border-bottom: 2px solid var(--primary); padding-bottom: 5px; display:inline-block;">💬 תגובות לאשכול:</h3>`;
-            html += `<div id="repliesList" style="margin-top:15px;">${p.replies.map(r => renderPostBlock(r, p.id, false)).join('')}</div>`;
-            
-            html += `
-                <div class="reply-box">
-                    <h4 style="margin-top:0;">הוסף תגובה משלך:</h4>
-                    <textarea id="replyContent" rows="3" placeholder="כתוב את תגובתך בכבוד הראוי..."></textarea>
-                    <button onclick="addReply(${p.id})">שלח תגובה לאשכול</button>
-                </div>
-            `;
+            let html = renderPostBlock(p, null, true) + `<h3 style="margin-top:20px;">💬 תגובות:</h3>`;
+            html += p.replies.map(r => renderPostBlock(r, p.id, false)).join('');
+            html += `<div style="margin-top:20px;"><h4>הוסף תגובה:</h4><textarea id="replyContent" rows="4"></textarea><button onclick="addReply(${p.id})">שלח תגובה</button></div>`;
             document.getElementById('threadContentArea').innerHTML = html;
         }
 
-        function backToThreads() { renderThreads(); }
-
         async function addReply(postId) {
             const content = document.getElementById('replyContent').value;
-            if (!content) return alert('לא ניתן לשלוח תגובה ריקה');
-            const fd = new FormData();
-            fd.append('author', currentUser); fd.append('content', content);
+            const fd = new FormData(); fd.append('author', currentUser); fd.append('content', content);
             await fetch(`/api/posts/${postId}/reply`, { method: 'POST', body: fd });
             await loadPosts(); openThread(postId);
         }
 
-        async function toggleLike(postId, replyId) {
-            const res = await fetch('/api/like', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, replyId}) });
-            const data = await res.json();
-            if(data.error) { alert(data.error); return; }
-            await loadPosts(); openThread(postId || replyId); // logic handling based on call
+        async function toggleLike(pId, rId) {
+            await fetch('/api/like', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId: pId, replyId: rId}) });
+            await loadPosts(); openThread(pId || rId);
         }
 
-        async function reportPost(postId, replyId) {
-            const reason = prompt("מה סיבת הדיווח? (יועבר ישירות לצוות ההנהלה)");
-            if (!reason) return;
-            await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({reporter: currentUser, postId, replyId, reason}) });
-            alert("תודה. הדיווח נשלח לצוות הפיקוח בהצלחה.");
+        async function reportPost(pId, rId) {
+            const reason = prompt("סיבת הדיווח:"); if (!reason) return;
+            await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({reporter: currentUser, postId: pId, replyId: rId, reason}) });
+            alert("הדיווח נשלח למנהלים.");
         }
 
-        async function editPost(postId, replyId) {
-            const newContent = prompt("הזן תוכן חדש (עריכת הנהלה):");
-            if (!newContent) return;
-            await fetch('/api/posts/edit', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, replyId, newContent}) });
-            await loadPosts(); openThread(postId || replyId);
+        async function editPost(pId, rId) {
+            const newC = prompt("תוכן חדש:"); if (!newC) return;
+            await fetch('/api/posts/edit', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId: pId, replyId: rId, newContent: newC}) });
+            await loadPosts(); openThread(pId || rId);
+        }
+
+        // --- הודעות פרטיות והתראות ---
+        async function loadPMs() {
+            const pms = await (await fetch(`/api/pms/${currentUser}`)).json();
+            document.getElementById('pmsList').innerHTML = pms.reverse().map(pm => `
+                <div class="pm-card">
+                    <div style="font-size:12px; color:#666;">מאת: <strong>${pm.from}</strong> אל: <strong>${pm.to}</strong> | ${pm.date}</div>
+                    <div style="margin-top:5px; white-space:pre-wrap;">${pm.content}</div>
+                </div>`).join('');
+        }
+
+        async function sendPM() {
+            const to = document.getElementById('pmTo').value, content = document.getElementById('pmContent').value;
+            const res = await fetch('/api/pms', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({from: currentUser, to, content}) });
+            if (res.ok) { document.getElementById('pmContent').value = ''; loadPMs(); alert('נשלח!'); }
+            else alert((await res.json()).error);
+        }
+
+        async function loadNotifications() {
+            const notifs = await (await fetch(`/api/notifications/${currentUser}`)).json();
+            document.getElementById('notifList').innerHTML = notifs.reverse().map(n => `
+                <div class="notif-card" style="border-right: 4px solid ${n.read ? '#ccc' : '#EF4444'};">
+                    ${n.text} <span style="font-size:11px; color:#888;">(${n.date})</span>
+                </div>`).join('');
+        }
+
+        async function markNotificationsRead() {
+            await fetch('/api/notifications/read', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser}) });
+            loadNotifications(); updateStatus();
         }
     </script>
 </body>
