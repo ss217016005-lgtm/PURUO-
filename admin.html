@@ -1,21 +1,114 @@
-// עדכון פונקציות ה-JavaScript בתוך admin.html
-async function loadAdminPosts() {
-    const response = await fetch('/api/posts');
-    const posts = await response.json();
-    const tbody = document.getElementById('adminTableBody');
-    tbody.innerHTML = posts.map((post) => `
-        <tr>
-            <td>${post.date}</td>
-            <td>${post.author}</td>
-            <td>${post.content}</td>
-            <td><button class="delete-btn" onclick="deletePost(${post.id})">מחק</button></td>
-        </tr>
-    `).join('');
-}
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>פאנל ניהול הפורום</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #2c3e50; color: white; padding: 20px; }
+        .container { max-width: 900px; margin: auto; background: #ecf0f1; color: #333; padding: 20px; border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
+        th, td { border: 1px solid #bdc3c7; padding: 10px; text-align: right; }
+        th { background: #34495e; color: white; }
+        button { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; color: white; }
+        .btn-approve { background: #27ae60; }
+        .btn-delete { background: #e74c3c; }
+        .section { margin-bottom: 40px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ccc; padding-bottom: 10px; margin-bottom: 20px;">
+            <h1 style="margin: 0;">ניהול המערכת</h1>
+            <button onclick="window.location.href='/'" style="background:#7f8c8d; font-size: 16px;">חזור לפורום</button>
+        </div>
 
-async function deletePost(id) {
-    if(confirm("למחוק הודעה זו?")) {
-        await fetch(`/api/posts/${id}`, { method: 'DELETE' });
-        loadAdminPosts();
-    }
-}
+        <div class="section">
+            <h2 style="color: #e67e22;">🔔 משתמשים הממתינים לאישור</h2>
+            <p>משתמשים אלו נרשמו למערכת ולא יוכלו להיכנס עד שתאשר אותם:</p>
+            <ul id="pendingUsersList" style="list-style: none; padding: 0;"></ul>
+        </div>
+
+        <div class="section">
+            <h2 style="color: #2980b9;">🗑️ ניהול הודעות בפורום</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>תאריך</th>
+                        <th>כותב</th>
+                        <th>קטגוריה</th>
+                        <th>תוכן</th>
+                        <th>קובץ מצורף</th>
+                        <th>פעולה</th>
+                    </tr>
+                </thead>
+                <tbody id="postsTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        async function loadPendingUsers() {
+            const res = await fetch('/api/admin/pending-users');
+            const users = await res.json();
+            const list = document.getElementById('pendingUsersList');
+            
+            if (users.length === 0) {
+                list.innerHTML = "<li style='color: green; font-weight: bold;'>אין משתמשים שממתינים לאישור.</li>";
+                return;
+            }
+
+            list.innerHTML = users.map(u => `
+                <li style="background: #f8f9fa; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                    <strong style="font-size: 18px;">${u}</strong> 
+                    <button class="btn-approve" onclick="approveUser('${u}')">אשר משתמש זה</button>
+                </li>
+            `).join('');
+        }
+
+        async function approveUser(username) {
+            const res = await fetch('/api/admin/approve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username })
+            });
+            const data = await res.json();
+            alert(data.message || data.error);
+            loadPendingUsers();
+        }
+
+        async function loadPosts() {
+            const res = await fetch('/api/posts');
+            const posts = await res.json();
+            const tbody = document.getElementById('postsTable');
+            
+            if (posts.length === 0) {
+                tbody.innerHTML = "<tr><td colspan='6' style='text-align:center;'>אין הודעות בפורום עדיין.</td></tr>";
+                return;
+            }
+
+            tbody.innerHTML = posts.map(p => `
+                <tr>
+                    <td>${p.date}</td>
+                    <td><strong>${p.author}</strong></td>
+                    <td>${p.category}</td>
+                    <td>${p.content}</td>
+                    <td>${p.fileUrl ? `<a href="${p.fileUrl}" target="_blank">צפה בקובץ</a>` : 'אין קובץ'}</td>
+                    <td><button class="btn-delete" onclick="deletePost(${p.id})">מחק פוסט</button></td>
+                </tr>
+            `).join('');
+        }
+
+        async function deletePost(id) {
+            if (confirm('למחוק פוסט זה לצמיתות?')) {
+                await fetch(`/api/posts/${id}`, { method: 'DELETE' });
+                loadPosts();
+            }
+        }
+
+        window.onload = () => {
+            loadPendingUsers();
+            loadPosts();
+        };
+    </script>
+</body>
+</html>
