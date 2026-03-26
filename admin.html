@@ -1,0 +1,21 @@
+// עדכון פונקציות ה-JavaScript בתוך admin.html
+async function loadAdminPosts() {
+    const response = await fetch('/api/posts');
+    const posts = await response.json();
+    const tbody = document.getElementById('adminTableBody');
+    tbody.innerHTML = posts.map((post) => `
+        <tr>
+            <td>${post.date}</td>
+            <td>${post.author}</td>
+            <td>${post.content}</td>
+            <td><button class="delete-btn" onclick="deletePost(${post.id})">מחק</button></td>
+        </tr>
+    `).join('');
+}
+
+async function deletePost(id) {
+    if(confirm("למחוק הודעה זו?")) {
+        await fetch(`/api/posts/${id}`, { method: 'DELETE' });
+        loadAdminPosts();
+    }
+}
