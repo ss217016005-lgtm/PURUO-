@@ -19,7 +19,7 @@ const defaultDB = {
     posts: [], reports: [], messages: [] 
 };
 
-// שדרוג מסד הנתונים
+// שדרוג מסד הנתונים השקט
 const readDB = () => {
     if (!fs.existsSync(DATA_FILE)) { fs.writeFileSync(DATA_FILE, JSON.stringify(defaultDB, null, 2)); return defaultDB; }
     let db = JSON.parse(fs.readFileSync(DATA_FILE));
@@ -42,7 +42,7 @@ const readDB = () => {
     if (db.posts) {
         db.posts.forEach(post => { 
             if (!post.followers) { post.followers = [post.author]; needsSave = true; } 
-            if (post.isLocked === undefined) { post.isLocked = false; needsSave = true; } // שדרוג: האם האשכול נעול
+            if (post.isLocked === undefined) { post.isLocked = false; needsSave = true; }
         });
     }
 
@@ -154,7 +154,7 @@ app.post('/api/posts', upload.single('attachedFile'), (req, res) => {
     const { author, title, content, category } = req.body; const db = readDB();
     const newPost = { id: Date.now(), author, title, category, content, date: new Date().toLocaleString('he-IL'), fileUrl: req.file ? `/uploads/${req.file.filename}` : null, likes: [], replies: [], followers: [author], isLocked: false };
     db.posts.push(newPost);
-    notifyMentions(content, author, title, newPost.id, db); // תיוגים באשכול חדש
+    notifyMentions(content, author, title, newPost.id, db); 
     writeDB(db); res.status(201).json(newPost);
 });
 
@@ -176,16 +176,13 @@ app.post('/api/posts/:id/reply', upload.single('attachedFile'), (req, res) => {
     const newReply = { id: Date.now(), author, content, date: new Date().toLocaleString('he-IL'), fileUrl: req.file ? `/uploads/${req.file.filename}` : null, likes: [] };
     post.replies.push(newReply);
     
-    // התראות לעוקבים
     post.followers.forEach(follower => {
         if (follower !== author) {
             const user = db.users.find(u => u.username === follower);
             if (user) user.notifications.push({ text: `תגובה חדשה מ-${author} באשכול: "${post.title}"`, threadId: post.id });
         }
     });
-    // התראות לתיוגים
     notifyMentions(content, author, post.title, post.id, db);
-
     writeDB(db); res.status(201).json(newReply);
 });
 
@@ -209,7 +206,7 @@ app.post('/api/like', (req, res) => {
     writeDB(db); res.json({ success: true });
 });
 
-// === ניהול ===
+// === ניהול ודיווחים ===
 app.put('/api/posts/move', (req, res) => {
     const { username, postId, newCategory } = req.body; const db = readDB();
     const user = db.users.find(u => u.username === username);
@@ -242,6 +239,24 @@ app.post('/api/report', (req, res) => {
     if (!db.reports) db.reports = [];
     db.reports.push({ id: Date.now(), reporter, postId, replyId, reason, date: new Date().toLocaleString('he-IL') });
     writeDB(db); res.json({ success: true, message: "הדיווח נשלח לצוות ההנהלה." });
+});
+
+// אלו השורות שנחתכו בטעות בגרסה הקודמת!
+app.get('/api/admin/reports', (req, res) => res.json(readDB().reports || []));
+
+app.delete('/api/admin/reports/:id', (req, res) => {
+    const db = readDB();
+    db.reports = (db.reports || []).filter(r => r.id !== parseInt(req.params.id));
+    writeDB(db); res.json({ success: true });
+});
+
+app.get('/api/admin/pending-users', (req, res) => res.json(readDB().users.filter(u => !u.isApproved && u.role !== 'admin').map(u => u.username)));
+
+app.post('/api/admin/approve', (req, res) => {
+    const db = readDB();
+    const user = db.users.find(u => u.username === req.body.username);
+    if (user) { user.isApproved = true; writeDB(db); res.json({ success: true }); } 
+    else res.status(404).json({ error: "לא נמצא." });
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
