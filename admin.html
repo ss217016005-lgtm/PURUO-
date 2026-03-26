@@ -16,6 +16,8 @@
         .btn-delete:hover { background: #c0392b; }
         .section { margin-bottom: 40px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .reports-section { border-right: 5px solid #e74c3c; }
+        .link-btn { background: #3498db; color: white; text-decoration: none; padding: 8px 12px; border-radius: 4px; display: inline-block; font-size: 14px;}
+        .link-btn:hover { background: #2980b9; }
     </style>
 </head>
 <body>
@@ -34,7 +36,7 @@
                         <th>תאריך</th>
                         <th>מדווח</th>
                         <th>סיבת הדיווח</th>
-                        <th>מזהה אשכול / תגובה</th>
+                        <th>מעבר להודעה</th>
                         <th>פעולה</th>
                     </tr>
                 </thead>
@@ -81,8 +83,8 @@
                     <td>${r.date}</td>
                     <td><strong>${r.reporter}</strong></td>
                     <td style="color: red; font-weight: bold;">${r.reason}</td>
-                    <td>אשכול: ${r.postId} ${r.replyId ? ` | תגובה: ${r.replyId}` : ''}</td>
-                    <td><button class="btn-approve" onclick="resolveReport(${r.id})">סמן כטופל (מחק דיווח)</button></td>
+                    <td><a class="link-btn" href="/?thread=${r.postId}" target="_blank">🔗 צפה בהודעה המדווחת</a></td>
+                    <td><button class="btn-approve" onclick="resolveReport(${r.id})">סמן כטופל (מחק)</button></td>
                 </tr>
             `).join('');
         }
@@ -134,7 +136,7 @@
                     <td>${p.date}</td>
                     <td><strong>${p.author}</strong></td>
                     <td>${p.category}</td>
-                    <td title="${p.content}">${p.title}</td>
+                    <td title="${p.content}"><a style="color:#2980b9;" href="/?thread=${p.id}" target="_blank">${p.title}</a></td>
                     <td><button class="btn-delete" onclick="deletePost(${p.id})">מחק אשכול לצמיתות</button></td>
                 </tr>
             `).join('');
