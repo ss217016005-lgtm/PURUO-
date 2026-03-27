@@ -14,7 +14,9 @@ const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-const defaultDB = { users: [], categories: ["תמונות והסרטות", "עזרה הדדית", "למעשה", "הפורום שלנו", "חדשות בציבור"], posts: [], reports: [], messages: [] };
+const newCategoriesList = ["תמונות והסרטות", "עזרה הדדית", "בית המדרש", "הלכה למעשה", "כתבי רבותינו", "קורות דורות", "הפורום שלנו", "חדשות בציבור"];
+
+const defaultDB = { users: [], categories: newCategoriesList, posts: [], reports: [], messages: [] };
 
 let dbCache = null;
 
@@ -25,7 +27,14 @@ function initDB() {
 
     if (!dbCache.reports) { dbCache.reports = []; needsSave = true; }
     if (!dbCache.messages) { dbCache.messages = []; needsSave = true; }
-    if (dbCache.categories && !dbCache.categories.includes("חדשות בציבור")) { dbCache.categories.push("חדשות בציבור"); needsSave = true; }
+    
+    // הגירת קטגוריות חכמה: הוספת החדשות ומחיקת "למעשה"
+    if (!dbCache.categories) dbCache.categories = [];
+    newCategoriesList.forEach(cat => {
+        if (!dbCache.categories.includes(cat)) { dbCache.categories.push(cat); needsSave = true; }
+    });
+    const oldCatIndex = dbCache.categories.indexOf("למעשה");
+    if (oldCatIndex > -1) { dbCache.categories.splice(oldCatIndex, 1); needsSave = true; }
     
     if (dbCache.users) {
         dbCache.users.forEach(user => {
@@ -39,10 +48,13 @@ function initDB() {
     }
     if (dbCache.posts) {
         dbCache.posts.forEach(post => { 
+            // העברה אוטומטית של פוסטים ישנים מהקטגוריה שנמחקה
+            if (post.category === "למעשה") { post.category = "הלכה למעשה"; needsSave = true; }
+            
             if (!post.followers) { post.followers = [post.author]; needsSave = true; } 
             if (post.isLocked === undefined) { post.isLocked = false; needsSave = true; }
             if (!post.lastUpdated) { post.lastUpdated = post.id; needsSave = true; }
-            if (post.views === undefined) { post.views = 0; needsSave = true; } // שדרוג: ספירת צפיות
+            if (post.views === undefined) { post.views = 0; needsSave = true; }
             if (post.fileUrl) { post.fileUrls = [post.fileUrl]; delete post.fileUrl; needsSave = true; }
             if (!post.fileUrls) { post.fileUrls = []; needsSave = true; }
             post.replies.forEach(r => {
@@ -145,7 +157,6 @@ app.post('/api/messages', (req, res) => {
 app.get('/api/categories', (req, res) => res.json(readDB().categories));
 app.get('/api/posts', (req, res) => { res.json(readDB().posts.sort((a, b) => b.lastUpdated - a.lastUpdated)); });
 
-// ספירת צפיות
 app.post('/api/posts/:id/view', (req, res) => {
     const db = readDB(); const post = db.posts.find(p => p.id === parseInt(req.params.id));
     if (post) { post.views = (post.views || 0) + 1; writeDB(db); res.json({ views: post.views }); } else res.status(404).json({ error: "לא נמצא" });
