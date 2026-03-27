@@ -12,7 +12,7 @@
         .main-content{flex:3;background:var(--box-bg);padding:25px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05)}
         .sidebar{flex:1;background:var(--box-bg);padding:20px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);height:fit-content}
         .hidden{display:none !important}
-        input[type="text"],input[type="password"],textarea,select{width:100%;padding:12px;margin:8px 0;border:1px solid var(--border);border-radius:8px;box-sizing:border-box}
+        input[type="text"],input[type="password"],textarea,select{width:100%;padding:12px;margin:8px 0;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;transition:0.3s}
         button{background:var(--primary);color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:bold;transition:0.2s}
         button:hover{transform:translateY(-1px);box-shadow:0 4px 6px rgba(79,70,229,0.3)}
         .btn-action{background:#f3f4f6;color:#4b5563;border:1px solid #d1d5db;font-size:13px;padding:6px 10px;border-radius:6px;cursor:pointer;display:inline-block;margin-left:5px}
@@ -40,9 +40,16 @@
         .icon-btn{cursor:pointer;font-size:20px;position:relative;margin-left:15px;background:none;border:none;padding:0;color:#1F2937}
         .icon-btn .notif-count{position:absolute;top:-8px;right:-10px;background:#EF4444;color:white;font-size:11px;padding:2px 6px;border-radius:50%;font-weight:bold}
         .chat-bubble{padding:8px;border-radius:8px;margin-bottom:8px;max-width:80%;clear:both;}
+        
+        /* עיצוב החלונות הקופצים בצד */
+        #toastContainer { position: fixed; bottom: 20px; left: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: var(--primary); color: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); animation: slideIn 0.3s ease-out; cursor: pointer; }
+        @keyframes slideIn { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     </style>
 </head>
 <body>
+
+    <div id="toastContainer"></div>
 
     <div id="sysModal" class="modal-overlay hidden"><div class="modal-box"><h2 id="sysModalTitle" style="margin-top:0; color: var(--primary);">הודעה</h2><div id="sysModalText" style="font-size:16px; margin-bottom: 25px; text-align:right;"></div><div id="sysModalBtns"></div></div></div>
 
@@ -111,6 +118,9 @@
         let readThreads = JSON.parse(localStorage.getItem('readThreads')) || {};
         window.currentConvos = {}; 
         
+        let lastUnreadCount = 0;
+        let lastUnreadMsgs = 0;
+
         const catColors = { "תמונות והסרטות": "#3b82f6", "עזרה הדדית": "#10b981", "בית המדרש": "#8b5cf6", "הלכה למעשה": "#d946ef", "כתבי רבותינו": "#f59e0b", "קורות דורות": "#06b6d4", "אקטואליה": "#ef4444", "הפורום שלנו": "#f97316", "חדשות בציבור": "#64748b" };
         function getCatColor(cat) { return catColors[cat] || "#6B7280"; }
         function timeAgo(ms) { if (!ms) return 'לא ידוע'; const s = Math.floor((Date.now()-ms)/1000); if (s<60) return 'מחובר כעת 🟢'; const m = Math.floor(s/60); if (m<60) return `לפני ${m} דקות`; const h = Math.floor(m/60); if (h<24) return `לפני ${h} שעות`; return `לפני ${Math.floor(h/24)} ימים`; }
@@ -118,20 +128,41 @@
         function closeModal() { document.getElementById('sysModal').classList.add('hidden'); }
         function showConfirm(txt, cb) { confirmActionCb = cb; document.getElementById('sysModalTitle').innerText='אישור'; document.getElementById('sysModalText').innerText=txt; document.getElementById('sysModalBtns').innerHTML=`<button onclick="closeModal(); confirmActionCb();" style="background:#EF4444; margin-left:10px;">כן</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden'); }
         
+        // --- מערכת ההתראות הקופצות (קול + חלון + דפדפן) ---
+        function playBeep() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator(); const gain = ctx.createGain();
+                osc.type = 'sine'; osc.frequency.setValueAtTime(880, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.start(); osc.stop(ctx.currentTime + 0.3);
+            } catch(e) {}
+        }
+        
+        function triggerPopupAlert(msg) {
+            playBeep();
+            
+            // יצירת חלון קופץ באתר
+            const toast = document.createElement('div');
+            toast.className = 'toast'; toast.innerText = msg;
+            toast.onclick = () => toast.remove();
+            document.getElementById('toastContainer').appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+
+            // יצירת התראת דפדפן (אם המשתמש אישר)
+            if ("Notification" in window && Notification.permission === "granted") {
+                new Notification("פורום פרומרקייט", { body: msg });
+            }
+        }
+
         window.insertTag = function(id, oTag, cTag) { const el=document.getElementById(id); const s=el.selectionStart, e=el.selectionEnd, txt=el.value; el.value = txt.substring(0,s)+oTag+txt.substring(s,e)+cTag+txt.substring(e,txt.length); el.focus(); el.selectionStart=s+oTag.length; el.selectionEnd=e+oTag.length; };
         
         function parseBBCode(txt) { 
             let html = txt.replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi, '<details class="spoiler"><summary>👁️ ספוילר (לחץ להצגה)</summary><div class="spoiler-content">$1</div></details>');
-            
-            if (Object.keys(usersInfo).length > 0) {
-                Object.keys(usersInfo).forEach(u => {
-                    if(u) {
-                        const regex = new RegExp('@' + u.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-                        html = html.replace(regex, `<span class="tagged-user" onclick="showUserProfile('${u}'); event.stopPropagation();">@${u}</span>`);
-                    }
-                });
-            }
-            
+            if (Object.keys(usersInfo).length > 0) { Object.keys(usersInfo).forEach(u => { if(u) { const regex = new RegExp('@' + u.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'); html = html.replace(regex, `<span class="tagged-user" onclick="showUserProfile('${u}'); event.stopPropagation();">@${u}</span>`); } }); }
             let prevHtml; do { prevHtml = html; html = html.replace(/\[quote="(.*?)"\]([\s\S]*?)\[\/quote\]/gi, '<div class="quote-box"><strong>מאת $1:</strong><br>$2</div>'); } while (html !== prevHtml); return html;
         }
 
@@ -142,16 +173,25 @@
         async function register() { const data = await authCall('/api/register', document.getElementById('username').value, document.getElementById('password').value); if(data.message) showMsg('הרשמה', data.message); else showMsg('שגיאה', data.error); }
         async function login() { const data = await authCall('/api/login', document.getElementById('username').value, document.getElementById('password').value); if (data.message) { currentUser = data.username; const rem = document.getElementById('rememberMe').checked; (rem?localStorage:sessionStorage).setItem('forumUser', currentUser); enterForum(); } else showMsg('שגיאה', data.error); }
 
-        async function enterForum() { document.getElementById('authSection').classList.add('hidden'); document.getElementById('forumSection').classList.remove('hidden'); document.getElementById('welcomeMsg').innerText = `שלום, ${currentUser}`; await initForum(); if(usersInfo[currentUser] && usersInfo[currentUser].role === 'admin') document.getElementById('adminBtn').classList.remove('hidden'); }
+        async function enterForum() {
+            document.getElementById('authSection').classList.add('hidden'); document.getElementById('forumSection').classList.remove('hidden'); document.getElementById('welcomeMsg').innerText = `שלום, ${currentUser}`; 
+            
+            // בקשת אישור לדפדפן בשביל התראות קופצות
+            if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+                Notification.requestPermission();
+            }
+            
+            await initForum(); if(usersInfo[currentUser] && usersInfo[currentUser].role === 'admin') document.getElementById('adminBtn').classList.remove('hidden'); 
+        }
         
         function logout() { localStorage.removeItem('forumUser'); sessionStorage.removeItem('forumUser'); location.href = '/'; }
 
         async function initForum() {
             usersInfo = await (await fetch('/api/users/info')).json(); currentUserRole = usersInfo[currentUser] ? usersInfo[currentUser].role : 'user';
             const cats = await (await fetch('/api/categories')).json(); 
-            const isVet = usersInfo[currentUser] && usersInfo[currentUser].isVeteran;
+            const isVet = usersInfo[currentUser] && (usersInfo[currentUser].isVeteran || currentUserRole === 'admin' || currentUserRole === 'mod');
             let catHtml = '<option value="">🌐 כל הקטגוריות</option>';
-            cats.forEach(c => { if(c==='אקטואליה' && !isVet && currentUserRole!=='admin' && currentUserRole!=='mod') return; catHtml += `<option value="${c}">📁 ${c}</option>`; });
+            cats.forEach(c => { if(c==='אקטואליה' && !isVet) return; catHtml += `<option value="${c}">📁 ${c}</option>`; });
             document.getElementById('categorySelect').innerHTML = catHtml;
             loadPosts(); updatePing(); setInterval(updatePing, 30000);
         }
@@ -161,8 +201,20 @@
             const res = await fetch('/api/ping', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser}) });
             const data = await res.json(); document.getElementById('onlineCount').innerText = data.onlineUsers.length;
             document.getElementById('onlineUsersList').innerHTML = data.onlineUsers.map(u => `<li style="padding: 5px 0; border-bottom: 1px solid #eee; cursor:pointer;" onclick="showUserProfile('${u}')">🟢 <span class="clickable-user">${u}</span></li>`).join('');
-            const nBadge = document.getElementById('notifBadge'); if (data.unreadCount > 0) { nBadge.innerText = data.unreadCount; nBadge.classList.remove('hidden'); } else nBadge.classList.add('hidden');
-            const mBadge = document.getElementById('msgBadge'); if (data.unreadMessages > 0) { mBadge.innerText = data.unreadMessages; mBadge.classList.remove('hidden'); } else mBadge.classList.add('hidden');
+            
+            const nBadge = document.getElementById('notifBadge'); 
+            if (data.unreadCount > 0) { 
+                nBadge.innerText = data.unreadCount; nBadge.classList.remove('hidden'); 
+                if (data.unreadCount > lastUnreadCount) triggerPopupAlert("🔔 התראה חדשה בפורום!");
+            } else nBadge.classList.add('hidden');
+            lastUnreadCount = data.unreadCount;
+            
+            const mBadge = document.getElementById('msgBadge'); 
+            if (data.unreadMessages > 0) { 
+                mBadge.innerText = data.unreadMessages; mBadge.classList.remove('hidden'); 
+                if (data.unreadMessages > lastUnreadMsgs) triggerPopupAlert("✉️ הודעה פרטית חדשה!");
+            } else mBadge.classList.add('hidden');
+            lastUnreadMsgs = data.unreadMessages;
         }
 
         window.showUserProfile = function(username) {
@@ -179,37 +231,26 @@
         };
         window.closeProfileAndReturn = function() { document.getElementById('userProfileView').classList.add('hidden'); renderThreads(); };
 
-        // --- מערכת צ'אט (הודעות פרטיות) ---
         async function openInbox() {
             const res = await fetch(`/api/messages/${currentUser}`); const msgs = await res.json(); document.getElementById('msgBadge').classList.add('hidden'); 
-            window.currentConvos = {};
-            msgs.forEach(m => { const p = m.from === currentUser ? m.to : m.from; if (!currentConvos[p]) currentConvos[p]=[]; currentConvos[p].push(m); });
-            
-            let html = `<div style="display:flex; gap:15px; height:350px;">`;
-            html += `<div style="flex:1; border-left:1px solid #ddd; padding-left:10px; overflow-y:auto;"><strong>אנשי קשר:</strong><br><br>`;
+            window.currentConvos = {}; msgs.forEach(m => { const p = m.from === currentUser ? m.to : m.from; if (!currentConvos[p]) currentConvos[p]=[]; currentConvos[p].push(m); });
+            let html = `<div style="display:flex; gap:15px; height:350px;"><div style="flex:1; border-left:1px solid #ddd; padding-left:10px; overflow-y:auto;"><strong>אנשי קשר:</strong><br><br>`;
             for (let p in currentConvos) html += `<button class="btn-action" style="width:100%; margin-bottom:8px; padding:10px;" onclick="openChat('${p}')">💬 ${p}</button>`;
             if (Object.keys(currentConvos).length===0) html += "<p>אין שיחות פתוחות.</p>";
-            html += `</div><div id="chatArea" style="flex:2; display:flex; flex-direction:column; background:#f9fafb; border-radius:8px; padding:10px;">
-                     <div style="flex:1; display:flex; align-items:center; justify-content:center; color:#aaa;">בחר שיחה מהרשימה</div></div></div>`;
-            showMsg('הודעות פרטיות', html);
+            html += `</div><div id="chatArea" style="flex:2; display:flex; flex-direction:column; background:#f9fafb; border-radius:8px; padding:10px;"><div style="flex:1; display:flex; align-items:center; justify-content:center; color:#aaa;">בחר שיחה מהרשימה</div></div></div>`; showMsg('הודעות פרטיות', html);
         }
         window.openChat = function(partner) {
             let html = `<div id="chatScroll" style="flex:1; overflow-y:auto; padding-right:10px; display:flex; flex-direction:column;">`;
             const chatMsgs = window.currentConvos[partner].sort((a,b) => a.id - b.id);
             chatMsgs.forEach(m => {
                 const isMe = m.from === currentUser;
-                html += `<div class="chat-bubble" style="background:${isMe?'#e0e7ff':'#fff'}; border:1px solid ${isMe?'#c7d2fe':'#e5e7eb'}; align-self:${isMe?'flex-end':'flex-start'};">
-                            <strong style="font-size:12px; color:gray;">${m.from}</strong><br>${m.content.replace(/\n/g, '<br>')}<div style="font-size:10px; color:#aaa; margin-top:4px;">${m.date}</div>
-                         </div>`;
+                html += `<div class="chat-bubble" style="background:${isMe?'#e0e7ff':'#fff'}; border:1px solid ${isMe?'#c7d2fe':'#e5e7eb'}; align-self:${isMe?'flex-end':'flex-start'};"><strong style="font-size:12px; color:gray;">${m.from}</strong><br>${m.content.replace(/\n/g, '<br>')}<div style="font-size:10px; color:#aaa; margin-top:4px;">${m.date}</div></div>`;
             });
-            html += `</div><div style="margin-top:10px; display:flex; gap:5px; border-top:1px solid #ddd; padding-top:10px;">
-                        <textarea id="pmReplyContent" rows="2" style="flex:1;" placeholder="השב ל-${partner}..."></textarea>
-                        <button onclick="sendPMReply('${partner}')">שלח</button></div>`;
-            document.getElementById('chatArea').innerHTML = html;
-            const scroll = document.getElementById('chatScroll'); scroll.scrollTop = scroll.scrollHeight;
+            html += `</div><div style="margin-top:10px; display:flex; gap:5px; border-top:1px solid #ddd; padding-top:10px;"><textarea id="pmReplyContent" rows="2" style="flex:1;" placeholder="השב ל-${partner}..."></textarea><button onclick="sendPMReply('${partner}')">שלח</button></div>`;
+            document.getElementById('chatArea').innerHTML = html; const scroll = document.getElementById('chatScroll'); scroll.scrollTop = scroll.scrollHeight;
         }
         window.openNewChat = function(toUser) {
-            if (!usersInfo[currentUser].isVeteran) return showMsg('שגיאה', 'רק משתמשים ותיקים (10+ לייקים) יכולים ליזום שיחות.');
+            if (!usersInfo[currentUser].isVeteran && currentUserRole !== 'admin' && currentUserRole !== 'mod') return showMsg('שגיאה', 'רק משתמשים ותיקים יכולים ליזום שיחות.');
             openInbox().then(() => { if (window.currentConvos[toUser]) openChat(toUser); else { window.currentConvos[toUser]=[]; openChat(toUser); }});
         }
         window.sendPMReply = async function(toUser) {
@@ -221,7 +262,7 @@
         window.gotoThread = async function(threadId) { closeModal(); await loadPosts(); openThread(threadId, true); };
         async function showNotifications() {
             const res = await fetch('/api/notifications/clear', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser}) });
-            const data = await res.json(); document.getElementById('notifBadge').classList.add('hidden');
+            const data = await res.json(); document.getElementById('notifBadge').classList.add('hidden'); lastUnreadCount = 0;
             if (data.notifications.length === 0) showMsg('התראות', 'אין חדש.'); else {
                 let html = '<ul style="text-align:right; list-style:none; padding:0;">';
                 data.notifications.forEach(n => { html += n.threadId ? `<li style="background:#f3f4f6; padding:10px; margin-bottom:5px; border-radius:5px; cursor:pointer;" onclick="gotoThread(${n.threadId})">🔔 ${n.text}</li>` : `<li style="background:#f3f4f6; padding:10px; margin-bottom:5px; border-radius:5px;">🔔 ${n.text || n}</li>`; });
@@ -254,8 +295,7 @@
             const cat = document.getElementById('categorySelect').value; 
             let filtered = postsData;
             
-            // חסימת אקטואליה
-            const isVet = usersInfo[currentUser] && (usersInfo[currentUser].isVeteran || usersInfo[currentUser].role === 'admin' || usersInfo[currentUser].role === 'mod');
+            const isVet = usersInfo[currentUser] && (usersInfo[currentUser].isVeteran || currentUserRole === 'admin' || currentUserRole === 'mod');
             if (!isVet) filtered = filtered.filter(p => p.category !== 'אקטואליה');
             if (cat) filtered = filtered.filter(p => p.category === cat);
             
@@ -289,7 +329,7 @@
 
         function renderPostBlock(p, replyId = null, isMain = false, parentPost = null) {
             const hasLiked = p.likes.includes(currentUser); const canMod = currentUserRole === 'admin' || currentUserRole === 'mod';
-            const canEdit = canMod || (p.author === currentUser); // אפשר לערוך תמיד!
+            const canEdit = canMod || (p.author === currentUser);
             
             let filesHtml = '';
             if (p.fileUrls && p.fileUrls.length > 0) {
@@ -367,18 +407,16 @@
         async function submitMove(postId, newCategory) { await fetch('/api/posts/move', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, newCategory}) }); showMsg('בוצע', 'הועבר!'); loadPosts(); }
 
         let currentActionPostId, currentActionReplyId;
-        function triggerReport(postId, replyId) { currentActionPostId = postId; currentActionReplyId = replyId; document.getElementById('sysModalTitle').innerText = 'דיווח'; document.getElementById('sysModalText').innerHTML = `<input type="text" id="modalInput" style="width:100%;" placeholder="סיבת הדיווח">`; document.getElementById('sysModalBtns').innerHTML = `<button onclick="closeModal(); submitReport(document.getElementById('modalInput').value);" style="background:#10B981; margin-left:10px;">שלח</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden'); setTimeout(() => document.getElementById('modalInput').focus(), 100); }
+        function triggerReport(postId, replyId) { currentActionPostId = postId; currentActionReplyId = replyId; showInputMsg("מה סיבת הדיווח?", submitReport); }
         async function submitReport(reason) { if (!reason) return; await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({reporter: currentUser, postId: currentActionPostId, replyId: currentActionReplyId, reason}) }); showMsg("נשלח", "הדיווח נשלח!"); }
 
-        function triggerContactUs() { document.getElementById('sysModalTitle').innerText = 'צור קשר'; document.getElementById('sysModalText').innerHTML = `<input type="text" id="modalInput" style="width:100%;" placeholder="במה נוכל לעזור?">`; document.getElementById('sysModalBtns').innerHTML = `<button onclick="closeModal(); submitContactUs(document.getElementById('modalInput').value);" style="background:#10B981; margin-left:10px;">שלח</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden'); setTimeout(() => document.getElementById('modalInput').focus(), 100); }
-        async function submitContactUs(text) { if(!text) return; await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({reporter: currentUser, postId: null, replyId: null, reason: "פניית צור קשר: " + text}) }); showMsg("נשלח", "פנייתך התקבלה."); }
+        function triggerContactUs() { showInputMsg("במה נוכל לעזור? הפנייה תגיע לצוות הניהול:", async (text) => { if(!text) return; await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({reporter: currentUser, postId: null, replyId: null, reason: "פניית צור קשר: " + text}) }); showMsg("נשלח", "פנייתך התקבלה."); }); }
 
         function triggerEdit(postId, replyId) { 
             currentActionPostId = postId; currentActionReplyId = replyId; 
             const p = postsData.find(x => x.id === postId);
             const target = replyId ? p.replies.find(r => r.id === replyId) : p;
             const currentContent = target.content.replace(/\[נערך לאחרונה.*\]/g, '').trim();
-            
             document.getElementById('sysModalTitle').innerText = 'עריכה'; 
             document.getElementById('sysModalText').innerHTML = `<textarea id="modalInput" rows="5" style="width:100%;"></textarea>`; 
             document.getElementById('modalInput').value = currentContent;
