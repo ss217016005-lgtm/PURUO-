@@ -48,7 +48,7 @@
         </div>
 
         <div class="section" style="border-right: 5px solid #8e44ad;">
-            <h2 style="color: #8e44ad; margin-top: 0;">👥 ניהול משתמשים רשומים</h2>
+            <h2 style="color: #8e44ad; margin-top: 0;">👥 ניהול משתמשים וצוות</h2>
             <table>
                 <thead>
                     <tr>
@@ -101,7 +101,6 @@
             const list = document.getElementById('pendingUsersList');
             if (users.length === 0) { list.innerHTML = "<li style='color: green; font-weight: bold;'>אין משתמשים שממתינים לאישור.</li>"; return; }
             list.innerHTML = users.map(u => {
-                // המרת השם למחרוזת בטוחה למניעת באגים בלחיצה
                 const safeName = u.replace(/'/g, "\\'");
                 return `<li style="background: #f8f9fa; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;"><strong style="font-size: 18px;">${u}</strong> <button class="btn-approve" onclick="approveUser('${safeName}')">אשר משתמש זה</button></li>`;
             }).join('');
@@ -121,8 +120,20 @@
                 let roleStr = u.role === 'admin' ? '👑 מנהל' : (u.role === 'mod' ? '🛡️ מפקח' : '👤 משתמש');
                 if(!u.isApproved && u.role !== 'admin') roleStr += ' (ממתין)';
                 const safeName = u.username.replace(/'/g, "\\'");
-                return `<tr><td><strong>${u.username}</strong></td><td>${roleStr}</td><td>${u.joinDate}</td><td>${u.role !== 'admin' ? `<button class="btn-delete" onclick="deleteUser('${safeName}')">מחק משתמש</button>` : '<span style="color:gray;">לא ניתן למחוק מנהל</span>'}</td></tr>`;
+                
+                let promoteBtn = '';
+                if (u.role === 'user') promoteBtn = `<button class="btn-mod" onclick="setRole('${safeName}', 'mod')">הפוך למפקח</button>`;
+                else if (u.role === 'mod') promoteBtn = `<button class="btn-delete" onclick="setRole('${safeName}', 'user')">הסר פיקוח</button>`;
+                
+                return `<tr><td><strong>${u.username}</strong></td><td>${roleStr}</td><td>${u.joinDate}</td><td>${u.role !== 'admin' ? `${promoteBtn} <button class="btn-delete" onclick="deleteUser('${safeName}')">מחק</button>` : '<span style="color:gray;">לא ניתן לערוך מנהל ראשי</span>'}</td></tr>`;
             }).join('');
+        }
+
+        async function setRole(username, role) {
+            if (confirm(`האם אתה בטוח שברצונך לשנות את הרשאות הפיקוח של ${username}?`)) {
+                await fetch(`/api/admin/users/${username}/role`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({role}) });
+                loadAllUsers();
+            }
         }
 
         async function deleteUser(username) {
