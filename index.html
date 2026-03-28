@@ -25,7 +25,7 @@
         .user-panel{background:#f3f4f6;padding:15px;width:160px;text-align:center;border-left:1px solid var(--border)}
         .content-panel{padding:15px;flex:1;display:flex;flex-direction:column}
         .badge{display:inline-block;padding:3px 8px;border-radius:12px;font-size:12px;font-weight:bold;margin-bottom:5px;color:white}
-        .badge-admin{background:#EF4444} .badge-mod{background:#F59E0B} .badge-top{background:#fbbf24;color:black} .badge-vet{background:#8B5CF6} .badge-user{background:#6B7280}
+        .badge-admin{background:#EF4444} .badge-mod{background:#F59E0B} .badge-editor{background:#0d9488} .badge-top{background:#fbbf24;color:black} .badge-vet{background:#8B5CF6} .badge-user{background:#6B7280}
         .quote-box{background:#e0f2fe;border-right:4px solid #0284c7;padding:12px;margin:10px 0;border-radius:8px 0 0 8px;color:#0c4a6e;font-style:italic;position:relative}
         .quote-box::before{content:"❝";font-size:24px;position:absolute;left:10px;top:5px;color:#7dd3fc;opacity:0.5}
         .spoiler{border:1px solid #ccc;border-radius:5px;background:#fff;margin:10px 0;overflow:hidden}
@@ -35,22 +35,23 @@
         .unread-badge{color:red;font-size:12px;font-weight:bold;background:#fee2e2;padding:2px 6px;border-radius:4px}
         .clickable-user{cursor:pointer;color:var(--primary);text-decoration:underline;text-decoration-color:transparent;transition:0.2s}
         .clickable-user:hover{text-decoration-color:var(--primary)}
-        .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999}
+        .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(2px)}
         .modal-box{background:white;padding:25px;border-radius:12px;text-align:center;max-width:500px;width:90%;box-shadow:0 10px 25px rgba(0,0,0,0.2);max-height:80vh;overflow-y:auto}
         .icon-btn{cursor:pointer;font-size:20px;position:relative;margin-left:15px;background:none;border:none;padding:0;color:#1F2937}
         .icon-btn .notif-count{position:absolute;top:-8px;right:-10px;background:#EF4444;color:white;font-size:11px;padding:2px 6px;border-radius:50%;font-weight:bold}
-        .chat-bubble{padding:8px;border-radius:8px;margin-bottom:8px;max-width:80%;clear:both;}
-        
-        /* עיצוב החלונות הקופצים בצד */
-        #toastContainer { position: fixed; bottom: 20px; left: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; }
-        .toast { background: var(--primary); color: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); animation: slideIn 0.3s ease-out; cursor: pointer; }
-        @keyframes slideIn { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .chat-bubble{padding:10px;border-radius:12px;margin-bottom:10px;max-width:85%;clear:both;position:relative}
+        .pm-thanks{font-size:10px;background:#fbcfe8;color:#be185d;padding:2px 5px;border-radius:10px;position:absolute;bottom:-8px;left:10px;border:1px solid white;cursor:pointer}
+        #toastContainer{position:fixed;bottom:20px;left:20px;z-index:10000;display:flex;flex-direction:column;gap:10px}
+        .toast{background:var(--primary);color:white;padding:15px 20px;border-radius:8px;box-shadow:0 4px 15px rgba(0,0,0,0.3);animation:slideIn 0.3s ease-out;cursor:pointer}
+        @keyframes slideIn{from{transform:translateX(-100%);opacity:0}to{transform:translateX(0);opacity:1}}
+        .tooltip{position:relative;display:inline-block}
+        .tooltip .tooltiptext{visibility:hidden;width:max-content;min-width:120px;background-color:#333;color:#fff;text-align:center;border-radius:6px;padding:5px 10px;position:absolute;z-index:1;bottom:125%;left:50%;transform:translateX(-50%);opacity:0;transition:opacity 0.3s}
+        .tooltip:hover .tooltiptext{visibility:visible;opacity:1}
     </style>
 </head>
 <body>
 
     <div id="toastContainer"></div>
-
     <div id="sysModal" class="modal-overlay hidden"><div class="modal-box"><h2 id="sysModalTitle" style="margin-top:0; color: var(--primary);">הודעה</h2><div id="sysModalText" style="font-size:16px; margin-bottom: 25px; text-align:right;"></div><div id="sysModalBtns"></div></div></div>
 
     <div class="header"><h1>✨ פורום פרומרקייט ✨</h1></div>
@@ -116,46 +117,23 @@
     <script>
         let currentUser = null, currentUserRole = null, postsData = [], usersInfo = {}, confirmActionCb = null;
         let readThreads = JSON.parse(localStorage.getItem('readThreads')) || {};
-        window.currentConvos = {}; 
-        
-        let lastUnreadCount = 0;
-        let lastUnreadMsgs = 0;
+        window.currentConvos = {}; let currentChatPartner = null;
+        let lastUnreadCount = 0, lastUnreadMsgs = 0;
 
         const catColors = { "תמונות והסרטות": "#3b82f6", "עזרה הדדית": "#10b981", "בית המדרש": "#8b5cf6", "הלכה למעשה": "#d946ef", "כתבי רבותינו": "#f59e0b", "קורות דורות": "#06b6d4", "אקטואליה": "#ef4444", "הפורום שלנו": "#f97316", "חדשות בציבור": "#64748b" };
         function getCatColor(cat) { return catColors[cat] || "#6B7280"; }
         function timeAgo(ms) { if (!ms) return 'לא ידוע'; const s = Math.floor((Date.now()-ms)/1000); if (s<60) return 'מחובר כעת 🟢'; const m = Math.floor(s/60); if (m<60) return `לפני ${m} דקות`; const h = Math.floor(m/60); if (h<24) return `לפני ${h} שעות`; return `לפני ${Math.floor(h/24)} ימים`; }
         function showMsg(t, txt, hm=true) { document.getElementById('sysModalTitle').innerText = t; document.getElementById('sysModalText').innerHTML = hm ? txt : `<div style="white-space:pre-wrap;">${txt}</div>`; document.getElementById('sysModalBtns').innerHTML = `<button onclick="closeModal()">סגור</button>`; document.getElementById('sysModal').classList.remove('hidden'); }
-        function closeModal() { document.getElementById('sysModal').classList.add('hidden'); }
+        function closeModal() { document.getElementById('sysModal').classList.add('hidden'); currentChatPartner = null; }
         function showConfirm(txt, cb) { confirmActionCb = cb; document.getElementById('sysModalTitle').innerText='אישור'; document.getElementById('sysModalText').innerText=txt; document.getElementById('sysModalBtns').innerHTML=`<button onclick="closeModal(); confirmActionCb();" style="background:#EF4444; margin-left:10px;">כן</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden'); }
-        
-        // --- מערכת ההתראות הקופצות (קול + חלון + דפדפן) ---
-        function playBeep() {
-            try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = ctx.createOscillator(); const gain = ctx.createGain();
-                osc.type = 'sine'; osc.frequency.setValueAtTime(880, ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
-                gain.gain.setValueAtTime(0.1, ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-                osc.connect(gain); gain.connect(ctx.destination);
-                osc.start(); osc.stop(ctx.currentTime + 0.3);
-            } catch(e) {}
-        }
-        
+        function showInputMsg(txt, cb) { document.getElementById('sysModalTitle').innerText='הזנה'; document.getElementById('sysModalText').innerHTML=`${txt}<br><br><input type="text" id="modalInput" style="width:100%;">`; document.getElementById('sysModalBtns').innerHTML=`<button onclick="closeModal(); ${cb.name}(document.getElementById('modalInput').value);" style="background:#10B981; margin-left:10px;">שמור</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden'); setTimeout(()=>document.getElementById('modalInput').focus(),100); }
+
+        function playBeep() { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(880, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.1, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3); } catch(e) {} }
         function triggerPopupAlert(msg) {
             playBeep();
-            
-            // יצירת חלון קופץ באתר
-            const toast = document.createElement('div');
-            toast.className = 'toast'; toast.innerText = msg;
-            toast.onclick = () => toast.remove();
-            document.getElementById('toastContainer').appendChild(toast);
-            setTimeout(() => toast.remove(), 4000);
-
-            // יצירת התראת דפדפן (אם המשתמש אישר)
-            if ("Notification" in window && Notification.permission === "granted") {
-                new Notification("פורום פרומרקייט", { body: msg });
-            }
+            const toast = document.createElement('div'); toast.className = 'toast'; toast.innerText = msg; toast.onclick = () => toast.remove();
+            document.getElementById('toastContainer').appendChild(toast); setTimeout(() => toast.remove(), 4000);
+            if ("Notification" in window && Notification.permission === "granted") new Notification("פורום פרומרקייט", { body: msg });
         }
 
         window.insertTag = function(id, oTag, cTag) { const el=document.getElementById(id); const s=el.selectionStart, e=el.selectionEnd, txt=el.value; el.value = txt.substring(0,s)+oTag+txt.substring(s,e)+cTag+txt.substring(e,txt.length); el.focus(); el.selectionStart=s+oTag.length; el.selectionEnd=e+oTag.length; };
@@ -175,46 +153,58 @@
 
         async function enterForum() {
             document.getElementById('authSection').classList.add('hidden'); document.getElementById('forumSection').classList.remove('hidden'); document.getElementById('welcomeMsg').innerText = `שלום, ${currentUser}`; 
-            
-            // בקשת אישור לדפדפן בשביל התראות קופצות
-            if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
-                Notification.requestPermission();
-            }
-            
+            if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") Notification.requestPermission();
             await initForum(); if(usersInfo[currentUser] && usersInfo[currentUser].role === 'admin') document.getElementById('adminBtn').classList.remove('hidden'); 
         }
-        
         function logout() { localStorage.removeItem('forumUser'); sessionStorage.removeItem('forumUser'); location.href = '/'; }
 
         async function initForum() {
             usersInfo = await (await fetch('/api/users/info')).json(); currentUserRole = usersInfo[currentUser] ? usersInfo[currentUser].role : 'user';
             const cats = await (await fetch('/api/categories')).json(); 
-            const isVet = usersInfo[currentUser] && (usersInfo[currentUser].isVeteran || currentUserRole === 'admin' || currentUserRole === 'mod');
+            const isVet = usersInfo[currentUser] && (usersInfo[currentUser].isVeteran || currentUserRole === 'admin' || currentUserRole === 'mod' || currentUserRole === 'editor');
             let catHtml = '<option value="">🌐 כל הקטגוריות</option>';
             cats.forEach(c => { if(c==='אקטואליה' && !isVet) return; catHtml += `<option value="${c}">📁 ${c}</option>`; });
             document.getElementById('categorySelect').innerHTML = catHtml;
-            loadPosts(); updatePing(); setInterval(updatePing, 30000);
+            loadPosts(); updatePing(); setInterval(updatePing, 3000); // שיניתי ל-3 שניות לטובת זיהוי הקלדה מהיר!
         }
 
-        async function updatePing() {
+        let typingTimeout;
+        window.handleTyping = function() {
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => { updatePing(null); }, 3000);
+            if(currentChatPartner) updatePing(currentChatPartner);
+        }
+
+        async function updatePing(typingTarget = null) {
             if (!currentUser) return;
-            const res = await fetch('/api/ping', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser}) });
+            const res = await fetch('/api/ping', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, typingTo: typingTarget}) });
             const data = await res.json(); document.getElementById('onlineCount').innerText = data.onlineUsers.length;
             document.getElementById('onlineUsersList').innerHTML = data.onlineUsers.map(u => `<li style="padding: 5px 0; border-bottom: 1px solid #eee; cursor:pointer;" onclick="showUserProfile('${u}')">🟢 <span class="clickable-user">${u}</span></li>`).join('');
             
             const nBadge = document.getElementById('notifBadge'); 
-            if (data.unreadCount > 0) { 
-                nBadge.innerText = data.unreadCount; nBadge.classList.remove('hidden'); 
-                if (data.unreadCount > lastUnreadCount) triggerPopupAlert("🔔 התראה חדשה בפורום!");
-            } else nBadge.classList.add('hidden');
+            if (data.unreadCount > 0) { nBadge.innerText = data.unreadCount; nBadge.classList.remove('hidden'); if (data.unreadCount > lastUnreadCount) triggerPopupAlert("🔔 התראה חדשה!"); } else nBadge.classList.add('hidden');
             lastUnreadCount = data.unreadCount;
             
             const mBadge = document.getElementById('msgBadge'); 
-            if (data.unreadMessages > 0) { 
-                mBadge.innerText = data.unreadMessages; mBadge.classList.remove('hidden'); 
-                if (data.unreadMessages > lastUnreadMsgs) triggerPopupAlert("✉️ הודעה פרטית חדשה!");
-            } else mBadge.classList.add('hidden');
+            if (data.unreadMessages > 0) { mBadge.innerText = data.unreadMessages; mBadge.classList.remove('hidden'); if (data.unreadMessages > lastUnreadMsgs) triggerPopupAlert("✉️ הודעה פרטית חדשה!"); } else mBadge.classList.add('hidden');
             lastUnreadMsgs = data.unreadMessages;
+
+            // זיהוי הקלדה בצ'אט
+            const typEl = document.getElementById('typingIndicator');
+            if (typEl && currentChatPartner) {
+                if (data.typingUsers.includes(currentChatPartner)) typEl.innerText = `${currentChatPartner} מקליד/ה...`;
+                else typEl.innerText = '';
+            }
+            
+            // רענון אוטומטי של הצ'אט אם הוא פתוח
+            if (currentChatPartner && !document.getElementById('sysModal').classList.contains('hidden')) {
+                const msgRes = await fetch(`/api/messages/${currentUser}`); const msgs = await msgRes.json();
+                const newMsgs = msgs.filter(m => (m.from === currentChatPartner || m.to === currentChatPartner));
+                if (JSON.stringify(newMsgs) !== JSON.stringify(window.currentConvos[currentChatPartner])) {
+                    window.currentConvos[currentChatPartner] = newMsgs;
+                    refreshChatBox(currentChatPartner);
+                }
+            }
         }
 
         window.showUserProfile = function(username) {
@@ -226,37 +216,55 @@
                 p.replies.forEach(r => { if (r.author === username) { found++; userPostsHtml += `<div style="background:white; border:1px solid #ddd; padding:10px; margin-bottom:5px; border-radius:5px; cursor:pointer;" onclick="openThread(${p.id})"><strong>הגיב באשכול:</strong> <span style="color:var(--primary);">${p.title}</span> <span style="font-size:11px; color:#888;">(${r.date})</span></div>`; }});
             });
             if (found === 0) userPostsHtml += "<p>טרם כתב הודעות.</p>";
-            let roleStr = info.role === 'admin' ? "👑 מנהל ראשי" : (info.role === 'mod' ? "🛡️ מפקח" : (info.totalLikes >= 50 ? "🏆 משתמש מוביל" : (info.isVeteran ? "🌟 משתמש ותיק" : "👤 משתמש רגיל")));
-            document.getElementById('profileContentArea').innerHTML = `<h2 style="color:var(--primary); margin-top:0;">פרופיל משתמש: ${username}</h2><div style="font-size:16px; line-height:1.8; margin-bottom: 20px;"><strong>סטטוס:</strong> ${roleStr}<br><strong>הצטרף:</strong> ${info.joinDate}<br><strong>נראה לאחרונה בפורום:</strong> ${timeAgo(info.lastSeen)}<br><strong>לייקים שקיבל:</strong> ❤️ ${info.totalLikes}<br>${currentUser !== username ? `<button class="btn-action" style="margin-top:10px; background:var(--primary); color:white;" onclick="openNewChat('${username}')">✉️ שלח הודעה פרטית</button>` : ''}</div>${userPostsHtml}`;
+            let roleStr = info.role === 'admin' ? "👑 מנהל ראשי" : (info.role === 'editor' ? "📝 עורך תוכן" : (info.role === 'mod' ? "🛡️ מפקח" : (info.totalLikes >= 50 ? "🏆 משתמש מוביל" : (info.isVeteran ? "🌟 משתמש ותיק" : "👤 משתמש רגיל"))));
+            document.getElementById('profileContentArea').innerHTML = `<h2 style="color:var(--primary); margin-top:0;">פרופיל משתמש: ${username}</h2><div style="font-size:16px; line-height:1.8; margin-bottom: 20px;"><strong>סטטוס:</strong> ${roleStr}<br><strong>הצטרף:</strong> ${info.joinDate}<br><strong>נראה לאחרונה:</strong> ${timeAgo(info.lastSeen)}<br><strong>לייקים:</strong> ❤️ ${info.totalLikes}<br>${currentUser !== username ? `<button class="btn-action" style="margin-top:10px; background:var(--primary); color:white;" onclick="openNewChat('${username}')">✉️ שלח הודעה פרטית</button>` : ''}</div>${userPostsHtml}`;
         };
         window.closeProfileAndReturn = function() { document.getElementById('userProfileView').classList.add('hidden'); renderThreads(); };
 
+        // --- צ'אט והודעות פרטיות ---
         async function openInbox() {
-            const res = await fetch(`/api/messages/${currentUser}`); const msgs = await res.json(); document.getElementById('msgBadge').classList.add('hidden'); 
+            const res = await fetch(`/api/messages/${currentUser}`); const msgs = await res.json();
             window.currentConvos = {}; msgs.forEach(m => { const p = m.from === currentUser ? m.to : m.from; if (!currentConvos[p]) currentConvos[p]=[]; currentConvos[p].push(m); });
-            let html = `<div style="display:flex; gap:15px; height:350px;"><div style="flex:1; border-left:1px solid #ddd; padding-left:10px; overflow-y:auto;"><strong>אנשי קשר:</strong><br><br>`;
-            for (let p in currentConvos) html += `<button class="btn-action" style="width:100%; margin-bottom:8px; padding:10px;" onclick="openChat('${p}')">💬 ${p}</button>`;
-            if (Object.keys(currentConvos).length===0) html += "<p>אין שיחות פתוחות.</p>";
-            html += `</div><div id="chatArea" style="flex:2; display:flex; flex-direction:column; background:#f9fafb; border-radius:8px; padding:10px;"><div style="flex:1; display:flex; align-items:center; justify-content:center; color:#aaa;">בחר שיחה מהרשימה</div></div></div>`; showMsg('הודעות פרטיות', html);
+            let html = `<div style="display:flex; gap:15px; height:400px;"><div style="flex:1; border-left:1px solid #ddd; padding-left:10px; overflow-y:auto;"><strong>אנשי קשר:</strong><br><br>`;
+            for (let p in currentConvos) {
+                const unread = currentConvos[p].filter(m => m.from === p && !m.read).length;
+                html += `<button class="btn-action" style="width:100%; margin-bottom:8px; padding:10px; position:relative;" onclick="openChat('${p}')">💬 ${p} ${unread>0?`<span class="unread-badge" style="position:absolute; left:5px;">${unread}</span>`:''}</button>`;
+            }
+            if (Object.keys(currentConvos).length===0) html += "<p>אין שיחות.</p>";
+            html += `</div><div id="chatArea" style="flex:2; display:flex; flex-direction:column; background:#f9fafb; border-radius:8px; padding:10px;"><div style="flex:1; display:flex; align-items:center; justify-content:center; color:#aaa;">בחר שיחה מהרשימה בצד</div></div></div>`; showMsg('הודעות פרטיות', html);
         }
-        window.openChat = function(partner) {
+        window.openChat = async function(partner) {
+            currentChatPartner = partner;
+            await fetch('/api/messages/read', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({username: currentUser, partner}) });
+            refreshChatBox(partner);
+        }
+        window.refreshChatBox = function(partner) {
+            if(!document.getElementById('chatArea')) return;
             let html = `<div id="chatScroll" style="flex:1; overflow-y:auto; padding-right:10px; display:flex; flex-direction:column;">`;
-            const chatMsgs = window.currentConvos[partner].sort((a,b) => a.id - b.id);
+            const chatMsgs = (window.currentConvos[partner] || []).sort((a,b) => a.id - b.id);
             chatMsgs.forEach(m => {
                 const isMe = m.from === currentUser;
-                html += `<div class="chat-bubble" style="background:${isMe?'#e0e7ff':'#fff'}; border:1px solid ${isMe?'#c7d2fe':'#e5e7eb'}; align-self:${isMe?'flex-end':'flex-start'};"><strong style="font-size:12px; color:gray;">${m.from}</strong><br>${m.content.replace(/\n/g, '<br>')}<div style="font-size:10px; color:#aaa; margin-top:4px;">${m.date}</div></div>`;
+                const likesHtml = m.likes.length > 0 ? `<div class="pm-thanks">❤️ ${m.likes.length}</div>` : '';
+                const likeBtn = !isMe ? `<button style="background:none; border:none; color:#be185d; cursor:pointer; font-size:12px; margin-top:5px;" onclick="likePM(${m.id})">👍 תודה</button>` : '';
+                html += `<div class="chat-bubble" style="background:${isMe?'#e0e7ff':'#fff'}; border:1px solid ${isMe?'#c7d2fe':'#e5e7eb'}; align-self:${isMe?'flex-end':'flex-start'};">
+                            <strong style="font-size:12px; color:gray;">${m.from}</strong><br>${m.content.replace(/\n/g, '<br>')}<div style="font-size:10px; color:#aaa; margin-top:4px;">${m.date}</div>
+                            ${likesHtml} ${likeBtn}
+                         </div>`;
             });
-            html += `</div><div style="margin-top:10px; display:flex; gap:5px; border-top:1px solid #ddd; padding-top:10px;"><textarea id="pmReplyContent" rows="2" style="flex:1;" placeholder="השב ל-${partner}..."></textarea><button onclick="sendPMReply('${partner}')">שלח</button></div>`;
+            html += `</div><div id="typingIndicator" style="font-size:11px; color:#888; height:15px; margin-top:5px;"></div><div style="margin-top:5px; display:flex; gap:5px; border-top:1px solid #ddd; padding-top:10px;">
+                        <textarea id="pmReplyContent" rows="2" style="flex:1;" placeholder="השב ל-${partner}..." oninput="handleTyping()"></textarea>
+                        <button onclick="sendPMReply('${partner}')">שלח</button></div>`;
             document.getElementById('chatArea').innerHTML = html; const scroll = document.getElementById('chatScroll'); scroll.scrollTop = scroll.scrollHeight;
         }
+        window.likePM = async function(id) { await fetch(`/api/messages/${id}/like`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({username: currentUser}) }); updatePing(); }
         window.openNewChat = function(toUser) {
-            if (!usersInfo[currentUser].isVeteran && currentUserRole !== 'admin' && currentUserRole !== 'mod') return showMsg('שגיאה', 'רק משתמשים ותיקים יכולים ליזום שיחות.');
             openInbox().then(() => { if (window.currentConvos[toUser]) openChat(toUser); else { window.currentConvos[toUser]=[]; openChat(toUser); }});
         }
         window.sendPMReply = async function(toUser) {
             const content = document.getElementById('pmReplyContent').value; if(!content) return;
-            await fetch('/api/messages', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({from: currentUser, to: toUser, content}) });
-            await openInbox(); openChat(toUser);
+            const res = await fetch('/api/messages', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({from: currentUser, to: toUser, content}) });
+            const data = await res.json(); if(data.error) return alert(data.error);
+            updatePing(); // ירענן את השיחה מיד
         }
 
         window.gotoThread = async function(threadId) { closeModal(); await loadPosts(); openThread(threadId, true); };
@@ -294,11 +302,9 @@
             document.getElementById('threadsView').classList.remove('hidden'); document.getElementById('singleThreadView').classList.add('hidden'); document.getElementById('userProfileView').classList.add('hidden');
             const cat = document.getElementById('categorySelect').value; 
             let filtered = postsData;
-            
-            const isVet = usersInfo[currentUser] && (usersInfo[currentUser].isVeteran || currentUserRole === 'admin' || currentUserRole === 'mod');
+            const isVet = usersInfo[currentUser] && (usersInfo[currentUser].isVeteran || currentUserRole === 'admin' || currentUserRole === 'mod' || currentUserRole === 'editor');
             if (!isVet) filtered = filtered.filter(p => p.category !== 'אקטואליה');
             if (cat) filtered = filtered.filter(p => p.category === cat);
-            
             document.getElementById('threadsList').innerHTML = filtered.map(generateThreadCard).join('');
         }
 
@@ -321,15 +327,17 @@
 
         function getUserBadge(username) {
             const info = usersInfo[username] || { role: 'user', joinDate: '', totalLikes: 0, isVeteran: false, lastSeen: Date.now() };
-            let roleHtml = info.role === 'admin' ? `<span class="badge badge-admin">👑 מנהל ראשי</span>` : (info.role === 'mod' ? `<span class="badge badge-mod">🛡️ צוות פיקוח</span>` : (info.totalLikes >= 50 ? `<span class="badge badge-top">🏆 משתמש מוביל</span>` : (info.isVeteran ? `<span class="badge badge-vet">🌟 משתמש ותיק</span>` : `<span class="badge badge-user">משתמש רגיל</span>`)));
+            let roleHtml = info.role === 'admin' ? `<span class="badge badge-admin">👑 מנהל</span>` : (info.role === 'editor' ? `<span class="badge badge-editor">📝 עורך תוכן</span>` : (info.role === 'mod' ? `<span class="badge badge-mod">🛡️ מפקח</span>` : (info.totalLikes >= 50 ? `<span class="badge badge-top">🏆 משתמש מוביל</span>` : (info.isVeteran ? `<span class="badge badge-vet">🌟 ותיק</span>` : `<span class="badge badge-user">משתמש</span>`))));
             return `${roleHtml}<br><span style="font-size:10px; color:#9CA3AF; display:block; margin-top:3px;">נראה לאחרונה: ${timeAgo(info.lastSeen)}</span><span style="font-size:11px; color:#6B7280; display:block; margin-top:2px;">הצטרף: ${info.joinDate}</span><span style="font-size:11px; color:#EC4899; font-weight:bold; display:block;">❤️ לייקים: ${info.totalLikes}</span>`;
         }
 
         window.insertQuote = function(author, content) { document.getElementById('replyContent').value += `[quote="${author}"]\n${content}\n[/quote]\n\n`; document.getElementById('replyContent').focus(); };
 
         function renderPostBlock(p, replyId = null, isMain = false, parentPost = null) {
-            const hasLiked = p.likes.includes(currentUser); const canMod = currentUserRole === 'admin' || currentUserRole === 'mod';
-            const canEdit = canMod || (p.author === currentUser);
+            const hasLiked = p.likes.includes(currentUser); 
+            const canMod = currentUserRole === 'admin' || currentUserRole === 'mod';
+            const canEditContent = canMod || (p.author === currentUser);
+            const canEditPostMeta = currentUserRole === 'admin' || currentUserRole === 'editor'; // לעורכי תוכן יש הרשאת שינוי שם/קטגוריה
             
             let filesHtml = '';
             if (p.fileUrls && p.fileUrls.length > 0) {
@@ -342,7 +350,8 @@
                 filesHtml += '</div>';
             }
             
-            const moveBtn = (isMain && currentUserRole === 'admin') ? `<button class="btn-action" onclick="triggerMove(${p.id})">📂 העבר</button>` : '';
+            const moveBtn = (isMain && canEditPostMeta) ? `<button class="btn-action" onclick="triggerMove(${p.id})">📂 העבר</button>` : '';
+            const renameBtn = (isMain && canEditPostMeta) ? `<button class="btn-action" onclick="triggerRename(${p.id}, '${p.title.replace(/'/g,"\\'")}')">✏️ שנה כותרת</button>` : '';
             const lockBtn = (isMain && canMod) ? `<button class="btn-action" onclick="triggerLock(${p.id})">${p.isLocked ? '🔓 שחרר' : '🔒 נעל'}</button>` : '';
             const deleteBtn = (!isMain && currentUserRole === 'admin') ? `<button class="btn-action" style="color:red;" onclick="deleteReply(${parentPost.id}, ${p.id})">🗑️ מחק תגובה</button>` : '';
             
@@ -357,11 +366,11 @@
                     <div style="font-size: 15px; white-space: pre-wrap; line-height: 1.6;">${parseBBCode(p.content)}</div>
                     ${filesHtml}
                     <div style="margin-top: auto; padding-top: 15px; display: flex; gap: 8px; border-top: 1px solid #e5e7eb; flex-wrap: wrap;">
-                        <button class="btn-action ${hasLiked ? 'liked' : ''}" title="${likesList}" onclick="toggleLike(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">👍 נהניתי (${p.likes.length})</button>
+                        <div class="tooltip"><button class="btn-action ${hasLiked ? 'liked' : ''}" onclick="toggleLike(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">👍 נהניתי (${p.likes.length})</button><span class="tooltiptext">${likesList}</span></div>
                         ${(!parentPost || !parentPost.isLocked) ? `<button class="btn-action" onclick="insertQuote('${p.author}', \`${p.content.replace(/`/g, "'")}\`)">💬 צטט</button>` : ''}
                         <button class="btn-action" style="color:#b91c1c;" onclick="triggerReport(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">🚨 דווח</button>
-                        ${canEdit ? `<button class="btn-action" style="color:#b45309;" onclick="triggerEdit(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">✏️ עריכה</button>` : ''}
-                        ${moveBtn} ${lockBtn} ${deleteBtn}
+                        ${canEditContent ? `<button class="btn-action" style="color:#b45309;" onclick="triggerEdit(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">✏️ עריכת תוכן</button>` : ''}
+                        ${renameBtn} ${moveBtn} ${lockBtn} ${deleteBtn}
                     </div>
                 </div>
             </div>`;
@@ -386,7 +395,6 @@
 
         function backToThreads() { history.pushState({}, '', '/'); document.getElementById('singleThreadView').setAttribute('data-current-id', ''); document.getElementById('userProfileView').classList.add('hidden'); renderThreads(); }
         async function toggleFollow(postId) { await fetch(`/api/posts/${postId}/follow`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser}) }); loadPosts(); }
-
         async function addReply(postId) {
             const content = document.getElementById('replyContent').value, fileInput = document.getElementById('replyFile');
             if (!content) return showMsg('שגיאה', 'לא ניתן לשלוח ריק');
@@ -406,6 +414,14 @@
         }
         async function submitMove(postId, newCategory) { await fetch('/api/posts/move', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, newCategory}) }); showMsg('בוצע', 'הועבר!'); loadPosts(); }
 
+        function triggerRename(postId, oldTitle) {
+            showInputMsg(`שנה כותרת מ- "${oldTitle}":`, async (newTitle) => {
+                if(!newTitle) return;
+                await fetch('/api/posts/rename', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, newTitle}) }); 
+                loadPosts();
+            });
+        }
+
         let currentActionPostId, currentActionReplyId;
         function triggerReport(postId, replyId) { currentActionPostId = postId; currentActionReplyId = replyId; showInputMsg("מה סיבת הדיווח?", submitReport); }
         async function submitReport(reason) { if (!reason) return; await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({reporter: currentUser, postId: currentActionPostId, replyId: currentActionReplyId, reason}) }); showMsg("נשלח", "הדיווח נשלח!"); }
@@ -414,14 +430,10 @@
 
         function triggerEdit(postId, replyId) { 
             currentActionPostId = postId; currentActionReplyId = replyId; 
-            const p = postsData.find(x => x.id === postId);
-            const target = replyId ? p.replies.find(r => r.id === replyId) : p;
+            const p = postsData.find(x => x.id === postId); const target = replyId ? p.replies.find(r => r.id === replyId) : p;
             const currentContent = target.content.replace(/\[נערך לאחרונה.*\]/g, '').trim();
-            document.getElementById('sysModalTitle').innerText = 'עריכה'; 
-            document.getElementById('sysModalText').innerHTML = `<textarea id="modalInput" rows="5" style="width:100%;"></textarea>`; 
-            document.getElementById('modalInput').value = currentContent;
-            document.getElementById('sysModalBtns').innerHTML = `<button onclick="closeModal(); submitEdit(document.getElementById('modalInput').value);" style="background:#10B981; margin-left:10px;">שמור</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`; 
-            document.getElementById('sysModal').classList.remove('hidden'); 
+            document.getElementById('sysModalTitle').innerText = 'עריכה'; document.getElementById('sysModalText').innerHTML = `<textarea id="modalInput" rows="5" style="width:100%;"></textarea>`; document.getElementById('modalInput').value = currentContent;
+            document.getElementById('sysModalBtns').innerHTML = `<button onclick="closeModal(); submitEdit(document.getElementById('modalInput').value);" style="background:#10B981; margin-left:10px;">שמור</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden'); 
         }
         async function submitEdit(newContent) { if (!newContent) return; await fetch('/api/posts/edit', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId: currentActionPostId, replyId: currentActionReplyId, newContent}) }); loadPosts(); }
     </script>
