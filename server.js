@@ -17,11 +17,14 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const getILTime = () => new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
 
-// הגדרת חיבור לאימייל שלך (Gmail)
+// הגדרת חיבור לאימייל שלך (Gmail) - מעודכן לשרתי ענן
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // חובה להיות false כשמשתמשים בפורט 587
+    requireTLS: true,
     auth: {
-        user: 'SS217016005@gmail.com', // <--- שנה לכתובת המייל האמיתית שלך
+        user: 'SS217016005@gmail.com', // <--- שנה לכתובת ה-Gmail האמיתית שלך
         pass: 'uxic xwss vgob ovoq'
     }
 });
@@ -58,7 +61,7 @@ function initDB() {
             if (user.isEmailVerified === undefined) { user.isEmailVerified = true; needsSave = true; } 
         });
     }
-    // ... (שאר בדיקות ה-DB של ההודעות והפוסטים) ...
+    
     if (dbCache.messages) { dbCache.messages.forEach(m => { if (!m.likes) { m.likes = []; needsSave = true; } if (!m.fileUrls) { m.fileUrls = []; needsSave = true; } if (!m.subject) { m.subject = 'שיחה כללית'; needsSave = true; } }); }
     if (dbCache.posts) { dbCache.posts.forEach(post => { if (!post.followers) { post.followers = [post.author]; needsSave = true; } if (post.isLocked === undefined) { post.isLocked = false; needsSave = true; } if (!post.lastUpdated) { post.lastUpdated = post.id; needsSave = true; } if (post.views === undefined) { post.views = 0; needsSave = true; } if (post.fileUrls === undefined) { post.fileUrls = post.fileUrl ? [post.fileUrl] : []; needsSave = true; } post.replies.forEach(r => { if (r.fileUrls === undefined) { r.fileUrls = r.fileUrl ? [r.fileUrl] : []; needsSave = true; } }); }); }
     
@@ -139,7 +142,7 @@ app.post('/api/register', (req, res) => {
     writeDB(db); 
 
     // שליחת אימייל האימות
-    const verifyLink = `http://${req.headers.host}/api/verify?token=${verificationToken}&user=${encodeURIComponent(username)}`;
+    const verifyLink = `https://${req.headers.host}/api/verify?token=${verificationToken}&user=${encodeURIComponent(username)}`;
     const mailOptions = {
         from: '"פורום פרומרקייט" <no-reply@fromarket.com>',
         to: email,
