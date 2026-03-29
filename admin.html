@@ -23,6 +23,9 @@
         .link-btn { background: #3498db; color: white; text-decoration: none; padding: 6px 10px; border-radius: 4px; display: inline-block;}
         .search-bar { display:flex; gap:10px; background:#f8f9fa; padding:15px; border:1px solid #ddd; border-radius:8px; margin-bottom:15px; flex-wrap:wrap;}
         .search-bar input { padding:8px; border:1px solid #ccc; border-radius:4px; flex:1;}
+        .form-group { margin-bottom: 15px; }
+        .form-group label { font-weight: bold; display: block; margin-bottom: 5px; }
+        .form-group textarea, .form-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
     </style>
 </head>
 <body>
@@ -34,6 +37,7 @@
 
         <div class="tabs">
             <button class="active" onclick="switchTab('tab-users')">👥 משתמשים ופעילות</button>
+            <button onclick="switchTab('tab-settings')">⚙️ הגדרות מערכת</button>
             <button onclick="switchTab('tab-reports')">🚨 דיווחים ופניות</button>
             <button onclick="switchTab('tab-cats')">🗂️ ניהול קטגוריות</button>
             <button onclick="switchTab('tab-posts')">🗑️ ניהול אשכולות</button>
@@ -50,6 +54,23 @@
                 <thead><tr><th>שם משתמש</th><th>תפקיד</th><th>כתובת IP</th><th>מה עושה עכשיו?</th><th>פעולה</th></tr></thead>
                 <tbody id="allUsersTable"></tbody>
             </table>
+        </div>
+
+        <div id="tab-settings" class="section" style="border-right: 5px solid #16a085;">
+            <h2 style="color: #16a085; margin-top: 0;">⚙️ הגדרות וכללים</h2>
+            
+            <div class="form-group">
+                <label>הודעת הנהלה צפה (באנר עליון בפורום):</label>
+                <input type="text" id="settingFloatingMsg" placeholder="לדוגמה: ברוכים הבאים למערכת החדשה שלנו! (השאר ריק כדי לכבות)">
+                <small style="color:#7f8c8d;">*ברגע שתעדכן פה טקסט, הוא יקפוץ לכולם. המשתמשים יוכלו לסגור את זה אצלם.</small>
+            </div>
+
+            <div class="form-group">
+                <label>כללי הפורום (מוצגים בהרשמה למשתמשים):</label>
+                <textarea id="settingRules" rows="8" placeholder="כתוב כאן את חוקי הפורום..."></textarea>
+            </div>
+
+            <button class="btn-approve" style="font-size:16px; padding:10px 20px;" onclick="saveSettings()">💾 שמור הגדרות</button>
         </div>
 
         <div id="tab-reports" class="section" style="border-right: 5px solid #e74c3c;">
@@ -116,6 +137,14 @@
         }
 
         async function loadData() {
+            // הגדרות מערכת
+            const sRes = await fetch('/api/settings'); const settings = await sRes.json();
+            if (settings) {
+                document.getElementById('settingRules').value = settings.rules || "";
+                document.getElementById('settingFloatingMsg').value = settings.floatingMessage ? settings.floatingMessage.text : "";
+            }
+
+            // משתמשים
             const uRes = await fetch('/api/admin/all-users'); const users = await uRes.json();
             const pRes = await fetch('/api/admin/pending-users'); const pending = await pRes.json();
             
@@ -145,6 +174,7 @@
                 return `<tr><td><strong>${u.username.replace(/</g, "&lt;")}</strong></td><td>${roleStr}</td><td style="font-family:monospace;">${u.ip || 'לא ידוע'}</td><td>${activity}</td><td>${u.role !== 'admin' ? `${promoteBtns} <button class="btn-delete" onclick="deleteUser('${u.username.replace(/'/g, "\\'")}')">מחק</button>` : '<span style="color:gray;">מנהל</span>'}</td></tr>`;
             }).join('');
 
+            // שאר הטבלאות
             const cRes = await fetch('/api/categories'); const cats = await cRes.json();
             document.getElementById('catsTable').innerHTML = cats.map(c => `<tr><td><strong>${c}</strong></td><td><button class="btn-mod" onclick="renameCat('${c.replace(/'/g,"\\'")}')">שנה שם</button> <button class="btn-delete" onclick="deleteCat('${c.replace(/'/g,"\\'")}')">מחק קטגוריה</button></td></tr>`).join('');
 
@@ -162,6 +192,14 @@
 
             const mRes = await fetch('/api/admin/all-messages'); allPmsCache = await mRes.json();
             renderPMs(allPmsCache);
+        }
+
+        // שמירת הגדרות (כללים והודעה צפה)
+        async function saveSettings() {
+            const rules = document.getElementById('settingRules').value;
+            const floatingMessageText = document.getElementById('settingFloatingMsg').value;
+            await fetch('/api/admin/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: adminUser, rules, floatingMessageText}) });
+            alert('ההגדרות נשמרו בהצלחה!');
         }
 
         function renderPMs(msgs) {
@@ -184,22 +222,9 @@
             renderPMs(allPmsCache);
         }
 
-        // ניהול קטגוריות
-        async function addCategory() {
-            const val = document.getElementById('newCatInput').value; if(!val) return;
-            await fetch('/api/admin/categories', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, newCat:val}) });
-            document.getElementById('newCatInput').value = ''; loadData();
-        }
-        async function renameCat(oldCat) {
-            const newCat = prompt(`שנה את שם הקטגוריה "${oldCat}" ל:`); if(!newCat) return;
-            await fetch('/api/admin/categories', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, oldCat, newCat}) }); loadData();
-        }
-        async function deleteCat(catName) {
-            if(confirm(`אזהרה: מחיקת קטגוריה תשאיר אשכולות ללא בית. למחוק את "${catName}"?`)) {
-                await fetch('/api/admin/categories', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, catName}) }); loadData();
-            }
-        }
-
+        async function addCategory() { const val = document.getElementById('newCatInput').value; if(!val) return; await fetch('/api/admin/categories', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, newCat:val}) }); document.getElementById('newCatInput').value = ''; loadData(); }
+        async function renameCat(oldCat) { const newCat = prompt(`שנה את שם הקטגוריה "${oldCat}" ל:`); if(!newCat) return; await fetch('/api/admin/categories', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, oldCat, newCat}) }); loadData(); }
+        async function deleteCat(catName) { if(confirm(`למחוק את "${catName}"?`)) { await fetch('/api/admin/categories', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, catName}) }); loadData(); } }
         async function approveUser(username) { await fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) }); alert("אושר!"); loadData(); }
         async function setRole(username, role) { if (confirm(`לשנות תפקיד ל-${username}?`)) { await fetch(`/api/admin/users/${username}/role`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({role}) }); loadData(); } }
         async function deleteUser(username) { if (confirm(`למחוק את "${username}" לצמיתות?`)) { await fetch(`/api/admin/delete-user`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ username }) }); loadData(); } }
