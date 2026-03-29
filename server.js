@@ -17,15 +17,18 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const getILTime = () => new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
 
-// הגדרת חיבור לאימייל שלך (Gmail) - מעודכן לשרתי ענן
+// הגדרת חיבור לאימייל - עם מעקף לחסימות של שרתי ענן (פורט 465 מאובטח)
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // חובה להיות false כשמשתמשים בפורט 587
-    requireTLS: true,
+    port: 465,
+    secure: true, 
     auth: {
-        user: 'SS217016005@gmail.com', // <--- שנה לכתובת ה-Gmail האמיתית שלך
+        user: 'SS217016005@gmail.com', 
         pass: 'uxic xwss vgob ovoq'
+    },
+    tls: {
+        // מונע נפילה במקרה של תעודות SSL פנימיות בשרת הענן
+        rejectUnauthorized: false
     }
 });
 
@@ -57,7 +60,6 @@ function initDB() {
             if (user.totalLikes === undefined) { user.totalLikes = 0; needsSave = true; }
             if (user.veteranProgress === undefined) { user.veteranProgress = 0; needsSave = true; }
             if (user.lastActive === undefined) { user.lastActive = user.lastSeen || Date.now(); needsSave = true; }
-            // תמיכה באימות מייל למשתמשים ישנים
             if (user.isEmailVerified === undefined) { user.isEmailVerified = true; needsSave = true; } 
         });
     }
@@ -111,7 +113,7 @@ app.get('/api/verify', (req, res) => {
     
     if (targetUser) {
         targetUser.isEmailVerified = true;
-        targetUser.verificationToken = null; // מחיקת הטוקן לאחר אימות
+        targetUser.verificationToken = null;
         writeDB(db);
         res.send(`<div style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px; direction: rtl;">
             <h1 style="color: #4F46E5;">האימייל אומת בהצלחה! 🎉</h1>
@@ -123,13 +125,29 @@ app.get('/api/verify', (req, res) => {
     }
 });
 
+// === נתיב למנהל לוותר על אימות אימייל ידנית ===
+app.post('/api/admin/verify-email', (req, res) => {
+    const { adminUser, targetUser } = req.body; const db = readDB();
+    const admin = db.users.find(u => u.username === adminUser);
+    if (!admin || admin.role !== 'admin') return res.status(403).json({ error: "אין הרשאה." });
+    
+    const userToVerify = db.users.find(u => u.username === targetUser);
+    if (userToVerify) {
+        userToVerify.isEmailVerified = true;
+        userToVerify.verificationToken = null;
+        writeDB(db);
+        res.json({ success: true });
+    } else {
+        res.status(404).json({ error: "משתמש לא נמצא." });
+    }
+});
+
 // === הרשמה חדשה עם אימייל ===
 app.post('/api/register', (req, res) => {
     const { username, password, email } = req.body; const db = readDB();
     if (db.users.find(u => u.username === username)) return res.status(400).json({ error: "שם המשתמש כבר קיים." });
     if (db.users.find(u => u.email === email)) return res.status(400).json({ error: "האימייל הזה כבר רשום במערכת." });
 
-    // יצירת קוד אימות אקראי
     const verificationToken = Date.now().toString(36) + Math.random().toString(36).substr(2);
 
     db.users.push({ 
@@ -141,7 +159,6 @@ app.post('/api/register', (req, res) => {
     });
     writeDB(db); 
 
-    // שליחת אימייל האימות
     const verifyLink = `https://${req.headers.host}/api/verify?token=${verificationToken}&user=${encodeURIComponent(username)}`;
     const mailOptions = {
         from: '"פורום פרומרקייט" <no-reply@fromarket.com>',
@@ -205,7 +222,7 @@ app.delete('/api/admin/reports/:id', (req, res) => { const db = readDB(); db.rep
 app.get('/api/admin/audit', (req, res) => res.json(readDB().auditLogs.reverse() || []));
 app.get('/api/admin/all-users', (req, res) => { res.json(readDB().users.map(u => ({ username: u.username, email: u.email, role: u.role, isApproved: u.isApproved, isEmailVerified: u.isEmailVerified, joinDate: u.joinDate, ip: u.ip, currentActivity: u.currentActivity, lastActive: u.lastActive }))); });
 app.get('/api/admin/all-messages', (req, res) => res.json(readDB().messages.reverse()));
-app.get('/api/admin/pending-users', (req, res) => res.json(readDB().users.filter(u => !u.isApproved && u.isEmailVerified && u.role !== 'admin').map(u => u.username))); // מציג להנהלה רק את אלו שאימתו אימייל!
+app.get('/api/admin/pending-users', (req, res) => res.json(readDB().users.filter(u => !u.isApproved && u.isEmailVerified && u.role !== 'admin').map(u => u.username)));
 app.post('/api/admin/approve', (req, res) => { const db = readDB(); const user = db.users.find(u => u.username === req.body.username); if (user) { user.isApproved = true; writeDB(db); res.json({ success: true }); } else res.status(404).json({ error: "לא נמצא." }); });
 app.post('/api/admin/delete-user', (req, res) => { const db = readDB(); const { username } = req.body; const user = db.users.find(u => u.username === username); if (user && user.role === 'admin') return res.status(400).json({error:"אי אפשר למחוק מנהל."}); db.users = db.users.filter(u => u.username !== username); writeDB(db); res.json({ success: true }); });
 app.put('/api/admin/users/:username/role', (req, res) => { const db = readDB(); const user = db.users.find(u => u.username === req.params.username); if (user && user.role !== 'admin') { user.role = req.body.role; writeDB(db); res.json({success: true}); } else res.status(400).json({error: "שגיאה"}); });
