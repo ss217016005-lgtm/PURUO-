@@ -107,6 +107,7 @@
                 <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap:wrap;">
                     <select id="categorySelect" onchange="renderThreads()" style="flex: 2; margin: 0; font-weight: bold; min-width:200px;"></select>
                     <button onclick="renderCategoryView()" style="background:#f59e0b; padding: 10px 15px;">🗂️ תצוגה לפי נושאים</button>
+                    <button onclick="markAllAsRead()" style="background:#6B7280; padding: 10px 15px;">✔️ סמן הכל כנקרא</button>
                     <button onclick="toggleNewThreadForm()" style="flex: 1; background: var(--secondary); min-width:150px;">+ פתח אשכול</button>
                 </div>
 
@@ -181,7 +182,6 @@
             }
         };
 
-        // --- פונקציה גלובלית להצגת הכללים, פועלת גם במסך ההתחברות ---
         window.showRules = async function() {
             try {
                 const res = await fetch('/api/settings');
@@ -253,8 +253,10 @@
                         const bannerId = 'banner_read_' + settings.floatingMessage.id;
                         if (!localStorage.getItem(bannerId)) {
                             const banner = document.createElement('div');
-                            banner.style = "background:#f59e0b; color:black; text-align:center; padding:10px; font-weight:bold; position:relative; box-shadow: 0 2px 4px rgba(0,0,0,0.1);";
-                            banner.innerHTML = `${settings.floatingMessage.text} <button onclick="this.parentElement.style.display='none'; localStorage.setItem('${bannerId}', 'true');" style="position:absolute; left:15px; top:50%; transform:translateY(-50%); background:none; color:black; border:none; font-size:20px; cursor:pointer;">✖</button>`;
+                            // יישום הצבע שנשמר בשרת (ברירת מחדל כתומה אם אין)
+                            const bgColor = settings.floatingMessage.color || "#f59e0b";
+                            banner.style = `background:${bgColor}; color:white; text-shadow: 1px 1px 2px black; text-align:center; padding:10px; font-weight:bold; position:relative; box-shadow: 0 2px 4px rgba(0,0,0,0.1);`;
+                            banner.innerHTML = `${settings.floatingMessage.text} <button onclick="this.parentElement.style.display='none'; localStorage.setItem('${bannerId}', 'true');" style="position:absolute; left:15px; top:50%; transform:translateY(-50%); background:none; color:white; text-shadow:none; border:none; font-size:20px; cursor:pointer;">✖</button>`;
                             document.body.insertBefore(banner, document.body.firstChild);
                         }
                     }
@@ -272,6 +274,17 @@
             document.getElementById('categorySelect').innerHTML = catHtml;
             loadPosts(); updatePing(); setInterval(updatePing, 3000); 
         }
+
+        // --- הפונקציה החדשה לסימון הכל כנקרא ---
+        window.markAllAsRead = function() {
+            if(postsData.length === 0) return;
+            postsData.forEach(p => {
+                readThreads[p.id] = Date.now();
+            });
+            localStorage.setItem('readThreads', JSON.stringify(readThreads));
+            renderThreads();
+            triggerPopupAlert("כל האשכולות סומנו כנקראו!");
+        };
 
         let typingTimeout;
         window.handleTyping = function() { clearTimeout(typingTimeout); typingTimeout = setTimeout(() => { updatePing(null); }, 3000); if(currentChatPartner) updatePing(currentChatPartner); }
@@ -333,7 +346,6 @@
         };
         window.closeProfileAndReturn = function() { document.getElementById('userProfileView').classList.add('hidden'); renderThreads(); };
 
-        // --- חיפושים ---
         window.executeSearch = function() {
             const query = document.getElementById('searchInput').value.toLowerCase();
             const type = document.getElementById('searchType').value;
@@ -366,7 +378,6 @@
             document.getElementById('threadContentArea').innerHTML = html;
         };
 
-        // --- הודעות פרטיות ---
         async function openInbox() {
             const res = await fetch(`/api/messages/${currentUser}`); const msgs = await res.json(); document.getElementById('msgBadge').classList.add('hidden'); 
             window.currentConvos = {}; 
@@ -485,14 +496,25 @@
             else { const currentOpenId = parseInt(document.getElementById('singleThreadView').getAttribute('data-current-id')); if(currentOpenId) openThread(currentOpenId, true); else renderThreads(); }
         }
 
+        // --- עדכון הפונקציה ליצירת כרטיסיית אשכול (עם תצוגת מגיב אחרון) ---
         function generateThreadCard(p) {
             const isUnread = p.lastUpdated > (readThreads[p.id] || 0);
+            
+            // מציאת המגיב האחרון
+            const lastMsg = p.replies.length > 0 ? p.replies[p.replies.length - 1] : p;
+            
             return `
             <div class="thread-card ${p.isLocked ? 'thread-locked' : ''}" onclick="openThread(${p.id})">
                 <div class="thread-title">${p.isLocked ? '🔒 ' : ''}<span class="cat-tag" style="background:${getCatColor(p.category)};">${p.category}</span>${p.title} ${isUnread ? '<span class="unread-badge">חדש</span>' : ''}</div>
-                <div style="font-size: 13px; color: #6B7280; display: flex; justify-content: space-between; margin-top:5px;">
-                    <span>מאת: <strong class="clickable-user" onclick="showUserProfile('${p.author}'); event.stopPropagation();">${p.author}</strong></span>
-                    <span>👁️ צפיות: ${p.views} | 💬 תגובות: ${p.replies.length}</span>
+                <div style="font-size: 13px; color: #6B7280; display: flex; justify-content: space-between; margin-top:5px; border-top: 1px solid #eee; padding-top: 5px;">
+                    <div>
+                        <span>מאת: <strong class="clickable-user" onclick="showUserProfile('${p.author}'); event.stopPropagation();">${p.author}</strong></span><br>
+                        <span style="font-size:11px;">👁️ ${p.views} צפיות | 💬 ${p.replies.length} תגובות</span>
+                    </div>
+                    <div style="text-align:left; font-size: 12px; color: #888;">
+                        <span>הודעה אחרונה מ: <strong class="clickable-user" onclick="showUserProfile('${lastMsg.author}'); event.stopPropagation();">${lastMsg.author}</strong></span><br>
+                        <span>${lastMsg.date}</span>
+                    </div>
                 </div>
             </div>`;
         }
