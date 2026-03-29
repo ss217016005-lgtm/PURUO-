@@ -119,6 +119,7 @@
                         <button type="button" onclick="insertTag('newThreadContent', '[color=red]', '[/color]')"><span style="color:red">A</span></button>
                         <button type="button" onclick="insertTag('newThreadContent', '[size=20]', '[/size]')">T</button>
                         <button type="button" onclick="insertTag('newThreadContent', '[spoiler]', '[/spoiler]')">👁️</button>
+                        <button type="button" onclick="promptForLink('newThreadContent')">🔗 קישור</button>
                     </div>
                     <textarea id="newThreadContent" rows="4" placeholder="תוכן ההודעה..." style="border-top:none; border-radius:0 0 8px 8px; margin-top:0;"></textarea>
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
@@ -166,24 +167,21 @@
         function showInputMsg(txt, cbName) { document.getElementById('sysModalTitle').innerText='הזנה'; document.getElementById('sysModalText').innerHTML=`${txt}<br><br><input type="text" id="modalInput" style="width:100%;">`; document.getElementById('sysModalBtns').innerHTML=`<button onclick="closeModal(); window['${cbName}'](document.getElementById('modalInput').value);" style="background:#10B981; margin-left:10px;">שמור</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden'); setTimeout(()=>document.getElementById('modalInput').focus(),100); }
         function showConfirm(txt, cb) { confirmActionCb = cb; document.getElementById('sysModalTitle').innerText='אישור'; document.getElementById('sysModalText').innerText=txt; document.getElementById('sysModalBtns').innerHTML=`<button onclick="closeModal(); confirmActionCb();" style="background:#EF4444; margin-left:10px;">כן</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden'); }
 
-        window.showRules = function() {
-            showMsg('כללי הפורום', `
-                <div style="text-align:right; font-size:15px; line-height:1.6;">
-                    <strong>ברוכים הבאים לפורום פרומרקייט!</strong><br><br>
-                    1. יש לשמור על שפה נקייה ומכבדת כלפי כלל המשתמשים.<br>
-                    2. אין לפרסם תוכן פוגעני, מסית או המנוגד לחוק.<br>
-                    3. צוות ההנהלה והפיקוח רשאי לערוך, להעביר או למחוק אשכולות ותגובות על פי שיקול דעתו הבלעדי.<br>
-                    4. פתיחת נושאים חדשים צריכה להיעשות בקטגוריה המתאימה בלבד.<br><br>
-                    <strong>גלישה נעימה ומועילה!</strong>
-                </div>
-            `, true);
-        };
-
         function playBeep() { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(880, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.1, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3); } catch(e) {} }
         function triggerPopupAlert(msg) { playBeep(); const toast = document.createElement('div'); toast.className = 'toast'; toast.innerText = msg; toast.onclick = () => toast.remove(); document.getElementById('toastContainer').appendChild(toast); setTimeout(() => toast.remove(), 4000); if ("Notification" in window && Notification.permission === "granted") new Notification("פורום פרומרקייט", { body: msg }); }
 
         window.insertTag = function(id, oTag, cTag) { const el=document.getElementById(id); const s=el.selectionStart, e=el.selectionEnd, txt=el.value; el.value = txt.substring(0,s)+oTag+txt.substring(s,e)+cTag+txt.substring(e,txt.length); el.focus(); el.selectionStart=s+oTag.length; el.selectionEnd=e+oTag.length; };
         
+        // --- פונקציה חדשה להוספת הקישור מהמשתמש ---
+        window.promptForLink = function(textareaId) {
+            const url = prompt("הדבק את הקישור כאן (כולל https://):");
+            if (url) {
+                const text = prompt("איזו מילה תרצה שתופיע כקישור? (השאר ריק כדי להציג את הכתובת עצמה)");
+                const linkText = text ? text : url;
+                insertTag(textareaId, `[url=${url}]`, `${linkText}[/url]`);
+            }
+        };
+
         function parseBBCode(txt) { 
             let html = txt.replace(/\[b\]([\s\S]*?)\[\/b\]/gi, '<strong>$1</strong>');
             html = html.replace(/\[i\]([\s\S]*?)\[\/i\]/gi, '<em>$1</em>');
@@ -191,6 +189,9 @@
             html = html.replace(/\[color=(.*?)\]([\s\S]*?)\[\/color\]/gi, '<span style="color:$1">$2</span>');
             html = html.replace(/\[size=(.*?)\]([\s\S]*?)\[\/size\]/gi, '<span style="font-size:$1px">$2</span>');
             html = html.replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi, '<details class="spoiler"><summary>👁️ ספוילר (לחץ להצגה)</summary><div class="spoiler-content">$1</div></details>');
+            // --- פיענוח תגית הקישור החדשה ---
+            html = html.replace(/\[url=(.*?)\]([\s\S]*?)\[\/url\]/gi, '<a href="$1" target="_blank" style="color:var(--primary); text-decoration:underline; font-weight:bold;">$2</a>');
+            
             if (Object.keys(usersInfo).length > 0) { Object.keys(usersInfo).forEach(u => { if(u) { const regex = new RegExp('@' + u.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'); html = html.replace(regex, `<span class="tagged-user" onclick="showUserProfile('${u}'); event.stopPropagation();">@${u}</span>`); } }); }
             let prevHtml; do { prevHtml = html; html = html.replace(/\[quote="(.*?)"\]([\s\S]*?)\[\/quote\]/gi, '<div class="quote-box"><strong>מאת $1:</strong><br>$2</div>'); } while (html !== prevHtml); return html;
         }
@@ -230,6 +231,33 @@
         function logout() { localStorage.removeItem('forumUser'); sessionStorage.removeItem('forumUser'); location.href = '/'; }
 
         async function initForum() {
+            // --- משיכת הגדרות השרת (הודעה צפה וכללים) ---
+            try {
+                const settingsRes = await fetch('/api/settings');
+                if (settingsRes.ok) {
+                    const settings = await settingsRes.json();
+                    
+                    // דריסת הפונקציה של חוקי הפורום כך שתציג את מה ששמור בשרת
+                    window.showRules = function() {
+                        showMsg('כללי הפורום', `<div style="text-align:right; font-size:15px; line-height:1.6; white-space:pre-wrap;">${settings.rules || 'אין חוקים מוגדרים'}</div>`, true);
+                    };
+
+                    // הצגת הודעה צפה אם קיימת וטרם נסגרה על ידי המשתמש
+                    if (settings.floatingMessage && settings.floatingMessage.text) {
+                        const bannerId = 'banner_read_' + settings.floatingMessage.id;
+                        if (!localStorage.getItem(bannerId)) {
+                            const banner = document.createElement('div');
+                            banner.style = "background:#f59e0b; color:black; text-align:center; padding:10px; font-weight:bold; position:relative; box-shadow: 0 2px 4px rgba(0,0,0,0.1);";
+                            banner.innerHTML = `${settings.floatingMessage.text} <button onclick="this.parentElement.style.display='none'; localStorage.setItem('${bannerId}', 'true');" style="position:absolute; left:15px; top:50%; transform:translateY(-50%); background:none; color:black; border:none; font-size:20px; cursor:pointer;">✖</button>`;
+                            document.body.insertBefore(banner, document.body.firstChild);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("שגיאה במשיכת הגדרות השרת", e);
+                window.showRules = function() { showMsg('כללי הפורום', 'שגיאה בטעינת החוקים.', true); };
+            }
+
             usersInfo = await (await fetch('/api/users/info')).json(); currentUserRole = usersInfo[currentUser] ? usersInfo[currentUser].role : 'user';
             document.getElementById('totalUsersCounter').innerText = Object.keys(usersInfo).length;
             const cats = await (await fetch('/api/categories')).json(); 
@@ -566,6 +594,7 @@
                         <button type="button" onclick="insertTag('replyContent', '[color=red]', '[/color]')"><span style="color:red">A</span></button>
                         <button type="button" onclick="insertTag('replyContent', '[size=20]', '[/size]')">T</button>
                         <button type="button" onclick="insertTag('replyContent', '[spoiler]', '[/spoiler]')">👁️</button>
+                        <button type="button" onclick="promptForLink('replyContent')">🔗 קישור</button>
                     </div>
                     <textarea id="replyContent" rows="4" placeholder="תגובתך (לתיוג הקלד @ ושם)" style="border-top:none; border-radius:0 0 8px 8px; margin-top:0;"></textarea>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; flex-wrap: wrap; gap: 10px;">
