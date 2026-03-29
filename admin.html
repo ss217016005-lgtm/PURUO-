@@ -25,7 +25,7 @@
         .search-bar input { padding:8px; border:1px solid #ccc; border-radius:4px; flex:1;}
         .form-group { margin-bottom: 15px; }
         .form-group label { font-weight: bold; display: block; margin-bottom: 5px; }
-        .form-group textarea, .form-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .form-group textarea, .form-group input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
     </style>
 </head>
 <body>
@@ -61,8 +61,12 @@
             
             <div class="form-group">
                 <label>הודעת הנהלה צפה (באנר עליון בפורום):</label>
-                <input type="text" id="settingFloatingMsg" placeholder="לדוגמה: ברוכים הבאים למערכת החדשה שלנו! (השאר ריק כדי לכבות)">
-                <small style="color:#7f8c8d;">*ברגע שתעדכן פה טקסט, הוא יקפוץ לכולם. המשתמשים יוכלו לסגור את זה אצלם.</small>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="settingFloatingMsg" placeholder="לדוגמה: ברוכים הבאים למערכת החדשה שלנו! (השאר ריק כדי לכבות)" style="flex: 1;">
+                    <label style="margin: 0;">צבע רקע:</label>
+                    <input type="color" id="settingFloatingColor" value="#f59e0b" style="padding: 0; width: 40px; height: 35px; border: none; cursor: pointer;">
+                </div>
+                <small style="color:#7f8c8d;">*ברגע שתעדכן פה טקסט או צבע, זה יקפוץ לכולם. המשתמשים יוכלו לסגור את זה אצלם.</small>
             </div>
 
             <div class="form-group">
@@ -84,7 +88,7 @@
         <div id="tab-cats" class="section" style="border-right: 5px solid #f39c12;">
             <h2 style="color: #f39c12;">🗂️ ניהול קטגוריות הפורום</h2>
             <div style="margin-bottom:15px;">
-                <input type="text" id="newCatInput" placeholder="הקלד שם לקטגוריה חדשה..." style="padding:8px;">
+                <input type="text" id="newCatInput" placeholder="הקלד שם לקטגוריה חדשה..." style="padding:8px; width: 250px;">
                 <button class="btn-approve" onclick="addCategory()">➕ הוסף קטגוריה חדשה</button>
             </div>
             <table>
@@ -142,6 +146,7 @@
             if (settings) {
                 document.getElementById('settingRules').value = settings.rules || "";
                 document.getElementById('settingFloatingMsg').value = settings.floatingMessage ? settings.floatingMessage.text : "";
+                document.getElementById('settingFloatingColor').value = settings.floatingMessage ? settings.floatingMessage.color : "#f59e0b";
             }
 
             // משתמשים
@@ -194,11 +199,11 @@
             renderPMs(allPmsCache);
         }
 
-        // שמירת הגדרות (כללים והודעה צפה)
         async function saveSettings() {
             const rules = document.getElementById('settingRules').value;
             const floatingMessageText = document.getElementById('settingFloatingMsg').value;
-            await fetch('/api/admin/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: adminUser, rules, floatingMessageText}) });
+            const floatingMessageColor = document.getElementById('settingFloatingColor').value;
+            await fetch('/api/admin/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: adminUser, rules, floatingMessageText, floatingMessageColor}) });
             alert('ההגדרות נשמרו בהצלחה!');
         }
 
