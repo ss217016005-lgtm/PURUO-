@@ -172,13 +172,27 @@
 
         window.insertTag = function(id, oTag, cTag) { const el=document.getElementById(id); const s=el.selectionStart, e=el.selectionEnd, txt=el.value; el.value = txt.substring(0,s)+oTag+txt.substring(s,e)+cTag+txt.substring(e,txt.length); el.focus(); el.selectionStart=s+oTag.length; el.selectionEnd=e+oTag.length; };
         
-        // --- פונקציה חדשה להוספת הקישור מהמשתמש ---
         window.promptForLink = function(textareaId) {
             const url = prompt("הדבק את הקישור כאן (כולל https://):");
             if (url) {
                 const text = prompt("איזו מילה תרצה שתופיע כקישור? (השאר ריק כדי להציג את הכתובת עצמה)");
                 const linkText = text ? text : url;
                 insertTag(textareaId, `[url=${url}]`, `${linkText}[/url]`);
+            }
+        };
+
+        // --- פונקציה גלובלית להצגת הכללים, פועלת גם במסך ההתחברות ---
+        window.showRules = async function() {
+            try {
+                const res = await fetch('/api/settings');
+                if(res.ok) {
+                    const settings = await res.json();
+                    showMsg('כללי הפורום', `<div style="text-align:right; font-size:15px; line-height:1.6; white-space:pre-wrap;">${settings.rules || 'אין חוקים מוגדרים'}</div>`, true);
+                } else {
+                    showMsg('כללי הפורום', 'לא ניתן לטעון את החוקים כרגע.', true);
+                }
+            } catch (e) {
+                showMsg('שגיאה', 'שגיאת רשת בטעינת הכללים.', true);
             }
         };
 
@@ -189,7 +203,6 @@
             html = html.replace(/\[color=(.*?)\]([\s\S]*?)\[\/color\]/gi, '<span style="color:$1">$2</span>');
             html = html.replace(/\[size=(.*?)\]([\s\S]*?)\[\/size\]/gi, '<span style="font-size:$1px">$2</span>');
             html = html.replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi, '<details class="spoiler"><summary>👁️ ספוילר (לחץ להצגה)</summary><div class="spoiler-content">$1</div></details>');
-            // --- פיענוח תגית הקישור החדשה ---
             html = html.replace(/\[url=(.*?)\]([\s\S]*?)\[\/url\]/gi, '<a href="$1" target="_blank" style="color:var(--primary); text-decoration:underline; font-weight:bold;">$2</a>');
             
             if (Object.keys(usersInfo).length > 0) { Object.keys(usersInfo).forEach(u => { if(u) { const regex = new RegExp('@' + u.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'); html = html.replace(regex, `<span class="tagged-user" onclick="showUserProfile('${u}'); event.stopPropagation();">@${u}</span>`); } }); }
@@ -231,18 +244,11 @@
         function logout() { localStorage.removeItem('forumUser'); sessionStorage.removeItem('forumUser'); location.href = '/'; }
 
         async function initForum() {
-            // --- משיכת הגדרות השרת (הודעה צפה וכללים) ---
             try {
                 const settingsRes = await fetch('/api/settings');
                 if (settingsRes.ok) {
                     const settings = await settingsRes.json();
                     
-                    // דריסת הפונקציה של חוקי הפורום כך שתציג את מה ששמור בשרת
-                    window.showRules = function() {
-                        showMsg('כללי הפורום', `<div style="text-align:right; font-size:15px; line-height:1.6; white-space:pre-wrap;">${settings.rules || 'אין חוקים מוגדרים'}</div>`, true);
-                    };
-
-                    // הצגת הודעה צפה אם קיימת וטרם נסגרה על ידי המשתמש
                     if (settings.floatingMessage && settings.floatingMessage.text) {
                         const bannerId = 'banner_read_' + settings.floatingMessage.id;
                         if (!localStorage.getItem(bannerId)) {
@@ -255,7 +261,6 @@
                 }
             } catch (e) {
                 console.error("שגיאה במשיכת הגדרות השרת", e);
-                window.showRules = function() { showMsg('כללי הפורום', 'שגיאה בטעינת החוקים.', true); };
             }
 
             usersInfo = await (await fetch('/api/users/info')).json(); currentUserRole = usersInfo[currentUser] ? usersInfo[currentUser].role : 'user';
