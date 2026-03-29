@@ -16,8 +16,7 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const getILTime = () => new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
 
-const newCategoriesList = ["תמונות והסרטות", "עזרה הדדית", "בית המדרש", "הלכה למעשה", "כתבי רבותינו", "קורות דורות", "אקטואליה", "הפורום שלנו", "חדשות בציבור"];
-const defaultDB = { users: [], categories: newCategoriesList, posts: [], reports: [], messages: [], auditLogs: [] };
+const defaultDB = { users: [], categories: ["תמונות והסרטות", "עזרה הדדית", "בית המדרש", "הלכה למעשה", "כתבי רבותינו", "קורות דורות", "אקטואליה", "הפורום שלנו", "חדשות בציבור"], posts: [], reports: [], messages: [], auditLogs: [] };
 
 let dbCache = null;
 
@@ -29,7 +28,7 @@ function initDB() {
     if (!dbCache.reports) { dbCache.reports = []; needsSave = true; }
     if (!dbCache.messages) { dbCache.messages = []; needsSave = true; }
     if (!dbCache.auditLogs) { dbCache.auditLogs = []; needsSave = true; }
-    if (!dbCache.categories) { dbCache.categories = newCategoriesList; needsSave = true; }
+    if (!dbCache.categories) { dbCache.categories = defaultDB.categories; needsSave = true; }
     
     if (dbCache.users) {
         dbCache.users.forEach(user => {
@@ -69,8 +68,6 @@ initDB();
 const storage = multer.diskStorage({ destination: (req, file, cb) => cb(null, UPLOADS_DIR), filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname) });
 const upload = multer({ storage });
 app.use(express.json()); app.use(express.static(__dirname)); app.use('/uploads', express.static(UPLOADS_DIR));
-
-// שמירת IP אמיתי מ-Railway
 app.set('trust proxy', true);
 
 function isVeteran(user) { return (user.role === 'admin' || user.role === 'mod' || user.role === 'editor' || user.veteranProgress >= 10); }
@@ -108,7 +105,6 @@ app.get('/api/users/info', (req, res) => {
     res.json(info);
 });
 
-// מערכת פינג ענקית (IP, פעילות, מחוברים)
 app.post('/api/ping', (req, res) => {
     const { username, typingTo, currentActivity } = req.body; const db = readDB(); 
     let unreadCount = 0, unreadMessages = 0, allNotifs = [];
@@ -117,7 +113,7 @@ app.post('/api/ping', (req, res) => {
         const user = db.users.find(u => u.username === username);
         if (user) {
             user.ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-            user.currentActivity = currentActivity || 'מחובר לפורום';
+            user.currentActivity = currentActivity || 'גולש בפורום הראשי';
             const now = Date.now(); if (now - user.lastActive > 432000000) user.veteranProgress = 0; 
             user.lastSeen = now; user.lastActive = now;
             if (typingTo !== undefined) { user.typingTo = typingTo; user.typingExpires = now + 4000; }
@@ -141,7 +137,13 @@ app.post('/api/notifications/mark-read', (req, res) => {
     res.json({ success: true });
 });
 
-// --- הודעות פרטיות (עם נושא וקבצים) ---
+app.post('/api/notifications/clear', (req, res) => {
+    const { username } = req.body; const db = readDB();
+    const user = db.users.find(u => u.username === username);
+    if (user) { user.notifications = []; writeDB(db); }
+    res.json({ success: true });
+});
+
 app.get('/api/messages/:username', (req, res) => {
     const db = readDB(); const msgs = db.messages.filter(m => m.to === req.params.username || m.from === req.params.username);
     res.json(msgs);
@@ -264,7 +266,7 @@ app.put('/api/posts/edit', (req, res) => {
     target.content = newContent + `\n\n[נערך לאחרונה ב-${getILTime()}]`; writeDB(db); res.json({ success: true });
 });
 
-// === עורכי תוכן, מנהלים וריגול ===
+// === עורכי תוכן ומנהלים ===
 app.put('/api/posts/rename', (req, res) => {
     const { username, postId, newTitle } = req.body; const db = readDB();
     const user = db.users.find(u => u.username === username);
@@ -300,20 +302,43 @@ app.post('/api/report', (req, res) => {
     if (!db.reports) db.reports = []; db.reports.push({ id: Date.now(), reporter, postId, replyId, reason, date: getILTime() }); writeDB(db); res.json({ success: true });
 });
 
-// נתיבי הנהלה
+// === קטגוריות למנהלים ===
+app.post('/api/admin/categories', (req, res) => {
+    const { username, newCat } = req.body; const db = readDB();
+    const user = db.users.find(u => u.username === username);
+    if (!user || user.role !== 'admin') return res.status(403).json({ error: "אין הרשאה" });
+    if (!db.categories.includes(newCat)) { db.categories.push(newCat); writeDB(db); }
+    res.json({ success: true });
+});
+
+app.put('/api/admin/categories', (req, res) => {
+    const { username, oldCat, newCat } = req.body; const db = readDB();
+    const user = db.users.find(u => u.username === username);
+    if (!user || user.role !== 'admin') return res.status(403).json({ error: "אין הרשאה" });
+    const idx = db.categories.indexOf(oldCat);
+    if (idx > -1) {
+        db.categories[idx] = newCat;
+        db.posts.forEach(p => { if (p.category === oldCat) p.category = newCat; });
+        writeDB(db);
+    }
+    res.json({ success: true });
+});
+
+app.delete('/api/admin/categories', (req, res) => {
+    const { username, catName } = req.body; const db = readDB();
+    const user = db.users.find(u => u.username === username);
+    if (!user || user.role !== 'admin') return res.status(403).json({ error: "אין הרשאה" });
+    db.categories = db.categories.filter(c => c !== catName);
+    writeDB(db); res.json({ success: true });
+});
+
+// נתיבי הנהלה כלליים
 app.get('/api/admin/reports', (req, res) => res.json(readDB().reports || []));
 app.delete('/api/admin/reports/:id', (req, res) => { const db = readDB(); db.reports = (db.reports || []).filter(r => r.id !== parseInt(req.params.id)); writeDB(db); res.json({ success: true }); });
 app.get('/api/admin/audit', (req, res) => res.json(readDB().auditLogs.reverse() || []));
-
-// קבלת כל פעילות המשתמשים למנהל (כולל IP)
-app.get('/api/admin/all-users', (req, res) => {
-    res.json(readDB().users.map(u => ({ username: u.username, role: u.role, isApproved: u.isApproved, joinDate: u.joinDate, ip: u.ip, currentActivity: u.currentActivity, lastActive: u.lastActive })));
-});
-
-app.get('/api/admin/all-messages', (req, res) => res.json(readDB().messages.reverse())); // מעקב אחרי הודעות פרטיות למנהל
+app.get('/api/admin/all-users', (req, res) => { res.json(readDB().users.map(u => ({ username: u.username, role: u.role, isApproved: u.isApproved, joinDate: u.joinDate, ip: u.ip, currentActivity: u.currentActivity, lastActive: u.lastActive }))); });
+app.get('/api/admin/all-messages', (req, res) => res.json(readDB().messages.reverse()));
 app.get('/api/admin/pending-users', (req, res) => res.json(readDB().users.filter(u => !u.isApproved && u.role !== 'admin').map(u => u.username)));
-
-// אישור ומחיקת משתמש בטוח (פוסט במקום Delete כדי למנוע באג תווים בשם)
 app.post('/api/admin/approve', (req, res) => { const db = readDB(); const user = db.users.find(u => u.username === req.body.username); if (user) { user.isApproved = true; writeDB(db); res.json({ success: true }); } else res.status(404).json({ error: "לא נמצא." }); });
 app.post('/api/admin/delete-user', (req, res) => { const db = readDB(); const { username } = req.body; const user = db.users.find(u => u.username === username); if (user && user.role === 'admin') return res.status(400).json({error:"אי אפשר למחוק מנהל."}); db.users = db.users.filter(u => u.username !== username); writeDB(db); res.json({ success: true }); });
 app.put('/api/admin/users/:username/role', (req, res) => { const db = readDB(); const user = db.users.find(u => u.username === req.params.username); if (user && user.role !== 'admin') { user.role = req.body.role; writeDB(db); res.json({success: true}); } else res.status(400).json({error: "שגיאה"}); });
