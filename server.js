@@ -19,7 +19,7 @@ const getILTime = () => new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jer
 const newCategoriesList = ["תמונות והסרטות", "עזרה הדדית", "בית המדרש", "הלכה למעשה", "כתבי רבותינו", "קורות דורות", "אקטואליה", "הפורום שלנו", "חדשות בציבור"];
 const defaultDB = { 
     users: [], categories: newCategoriesList, posts: [], reports: [], messages: [], auditLogs: [],
-    settings: { rules: "ברוכים הבאים לפורום פרומרקייט!\n\n1. יש לשמור על שפה נקייה ומכבדת.\n2. אין לפרסם תוכן פוגעני.\n3. פתיחת נושאים צריכה להיעשות בקטגוריה המתאימה.\n\nגלישה נעימה!", floatingMessage: { text: "", id: 0 } }
+    settings: { rules: "ברוכים הבאים לפורום פרומרקייט!\n\n1. יש לשמור על שפה נקייה ומכבדת.\n2. אין לפרסם תוכן פוגעני.\n3. פתיחת נושאים צריכה להיעשות בקטגוריה המתאימה.\n\nגלישה נעימה!", floatingMessage: { text: "", color: "#f59e0b", id: 0 } }
 };
 
 let dbCache = null;
@@ -34,6 +34,7 @@ function initDB() {
     if (!dbCache.auditLogs) { dbCache.auditLogs = []; needsSave = true; }
     if (!dbCache.categories) { dbCache.categories = newCategoriesList; needsSave = true; }
     if (!dbCache.settings) { dbCache.settings = defaultDB.settings; needsSave = true; }
+    if (!dbCache.settings.floatingMessage.color) { dbCache.settings.floatingMessage.color = "#f59e0b"; needsSave = true; }
     
     if (dbCache.users) {
         dbCache.users.forEach(user => {
@@ -88,16 +89,16 @@ function notifyMentionsAndQuotes(content, author, postTitle, threadId, db) {
     });
 }
 
-// === הגדרות וכללים (חדש!) ===
+// === הגדרות וכללים ===
 app.get('/api/settings', (req, res) => res.json(readDB().settings));
 app.put('/api/admin/settings', (req, res) => {
-    const { username, rules, floatingMessageText } = req.body; const db = readDB();
+    const { username, rules, floatingMessageText, floatingMessageColor } = req.body; const db = readDB();
     const user = db.users.find(u => u.username === username);
     if (!user || user.role !== 'admin') return res.status(403).json({ error: "אין הרשאה." });
     
     db.settings.rules = rules;
-    if (db.settings.floatingMessage.text !== floatingMessageText) {
-        db.settings.floatingMessage = { text: floatingMessageText, id: Date.now() }; // זיהוי הודעה חדשה
+    if (db.settings.floatingMessage.text !== floatingMessageText || db.settings.floatingMessage.color !== floatingMessageColor) {
+        db.settings.floatingMessage = { text: floatingMessageText, color: floatingMessageColor || "#f59e0b", id: Date.now() }; 
     }
     writeDB(db); res.json({ success: true });
 });
