@@ -12,7 +12,7 @@
         .main-content{flex:3;background:var(--box-bg);padding:25px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05)}
         .sidebar{flex:1;background:var(--box-bg);padding:20px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);height:fit-content}
         .hidden{display:none !important}
-        input[type="text"],input[type="password"],textarea,select{width:100%;padding:12px;margin:8px 0;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;transition:0.3s}
+        input[type="text"],input[type="password"],input[type="email"],textarea,select{width:100%;padding:12px;margin:8px 0;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;transition:0.3s}
         button{background:var(--primary);color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:bold;transition:0.2s}
         button:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 4px 6px rgba(79,70,229,0.3)}
         button:disabled{opacity:0.6;cursor:not-allowed}
@@ -60,9 +60,10 @@
     <div class="header"><h1>✨ פורום פרומרקייט ✨</h1></div>
 
     <div id="authSection" style="max-width: 450px; margin: 50px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
-        <h2 style="text-align:center; color: var(--primary);">התחברות לפורום</h2>
+        <h2 style="text-align:center; color: var(--primary);">התחברות והרשמה</h2>
         <input type="text" id="username" placeholder="שם משתמש">
         <input type="password" id="password" placeholder="סיסמה">
+        <input type="email" id="regEmail" placeholder="כתובת אימייל (חובה רק להרשמה חדשה)">
         <label style="display: block; margin: 10px 0; font-size: 14px; cursor: pointer;">
             <input type="checkbox" id="rememberMe" style="width: auto;"> תזכור אותי
         </label>
@@ -217,12 +218,21 @@
         
         window.onload = () => { const savedUser = localStorage.getItem('forumUser') || sessionStorage.getItem('forumUser'); if (savedUser) { currentUser = savedUser; enterForum(); } };
 
-        async function authCall(url, u, p) { if (!u||!p) return showMsg('שגיאה', 'מלא הכל', false); const res = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: u, password: p}) }); return await res.json(); }
+        async function authCall(url, u, p, email = null) { 
+            if (!u||!p) return showMsg('שגיאה', 'מלא הכל', false); 
+            const bodyData = {username: u, password: p};
+            if (email) bodyData.email = email;
+            const res = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(bodyData) }); 
+            return await res.json(); 
+        }
         
         async function register() { 
             if (!document.getElementById('agreeRules').checked) return showMsg('שגיאה', 'חובה לאשר את כללי הפורום כדי להירשם.', false);
+            const email = document.getElementById('regEmail').value;
+            if (!email || !email.includes('@')) return showMsg('שגיאה', 'חובה להזין כתובת אימייל תקינה להרשמה.', false);
+            
             if(isSubmitting) return; isSubmitting=true; document.getElementById('regBtn').disabled=true; 
-            const data = await authCall('/api/register', document.getElementById('username').value, document.getElementById('password').value); 
+            const data = await authCall('/api/register', document.getElementById('username').value, document.getElementById('password').value, email); 
             if(data.message) showMsg('הרשמה', data.message); else showMsg('שגיאה', data.error); 
             isSubmitting=false; document.getElementById('regBtn').disabled=false; 
         }
@@ -253,7 +263,6 @@
                         const bannerId = 'banner_read_' + settings.floatingMessage.id;
                         if (!localStorage.getItem(bannerId)) {
                             const banner = document.createElement('div');
-                            // יישום הצבע שנשמר בשרת (ברירת מחדל כתומה אם אין)
                             const bgColor = settings.floatingMessage.color || "#f59e0b";
                             banner.style = `background:${bgColor}; color:white; text-shadow: 1px 1px 2px black; text-align:center; padding:10px; font-weight:bold; position:relative; box-shadow: 0 2px 4px rgba(0,0,0,0.1);`;
                             banner.innerHTML = `${settings.floatingMessage.text} <button onclick="this.parentElement.style.display='none'; localStorage.setItem('${bannerId}', 'true');" style="position:absolute; left:15px; top:50%; transform:translateY(-50%); background:none; color:white; text-shadow:none; border:none; font-size:20px; cursor:pointer;">✖</button>`;
@@ -275,7 +284,6 @@
             loadPosts(); updatePing(); setInterval(updatePing, 3000); 
         }
 
-        // --- הפונקציה החדשה לסימון הכל כנקרא ---
         window.markAllAsRead = function() {
             if(postsData.length === 0) return;
             postsData.forEach(p => {
@@ -496,11 +504,8 @@
             else { const currentOpenId = parseInt(document.getElementById('singleThreadView').getAttribute('data-current-id')); if(currentOpenId) openThread(currentOpenId, true); else renderThreads(); }
         }
 
-        // --- עדכון הפונקציה ליצירת כרטיסיית אשכול (עם תצוגת מגיב אחרון) ---
         function generateThreadCard(p) {
             const isUnread = p.lastUpdated > (readThreads[p.id] || 0);
-            
-            // מציאת המגיב האחרון
             const lastMsg = p.replies.length > 0 ? p.replies[p.replies.length - 1] : p;
             
             return `
