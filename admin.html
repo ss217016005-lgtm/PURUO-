@@ -2,127 +2,150 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>פאנל ניהול הפורום</title>
+    <title>פאנל ניהול - פרומרקייט</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #2c3e50; color: white; padding: 20px; }
-        .container { max-width: 1000px; margin: auto; background: #ecf0f1; color: #333; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
-        th, td { border: 1px solid #bdc3c7; padding: 12px; text-align: right; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #2c3e50; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: auto; background: #ecf0f1; padding: 25px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #bdc3c7; padding-bottom: 15px; margin-bottom: 20px; }
+        
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #bdc3c7; padding-bottom: 10px; flex-wrap: wrap;}
+        .tabs button { background: #7f8c8d; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        .tabs button.active { background: #2980b9; }
+        
+        .section { display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .section.active { display: block; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; font-size: 14px; }
+        th, td { border: 1px solid #bdc3c7; padding: 10px; text-align: right; }
         th { background: #34495e; color: white; }
-        button { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; color: white; font-weight: bold; margin: 2px; }
+        
+        button { padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; color: white; font-weight: bold; margin: 2px; }
         .btn-approve { background: #27ae60; } .btn-approve:hover { background: #2ecc71; }
         .btn-delete { background: #e74c3c; } .btn-delete:hover { background: #c0392b; }
         .btn-mod { background: #f39c12; } .btn-mod:hover { background: #e67e22; }
         .btn-editor { background: #0d9488; } .btn-editor:hover { background: #14b8a6; }
-        .section { margin-bottom: 40px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .reports-section { border-right: 5px solid #e74c3c; }
-        .link-btn { background: #3498db; color: white; text-decoration: none; padding: 8px 12px; border-radius: 4px; display: inline-block; font-size: 14px;}
-        .link-btn:hover { background: #2980b9; }
-        .audit-row { background: #f8f9fa; font-size: 14px; }
+        .link-btn { background: #3498db; color: white; text-decoration: none; padding: 6px 10px; border-radius: 4px; display: inline-block;}
     </style>
 </head>
 <body>
     <div class="container">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ccc; padding-bottom: 15px; margin-bottom: 20px;">
-            <h1 style="margin: 0; color: #2c3e50;">⚙️ ניהול המערכת</h1>
-            <button onclick="window.location.href='/'" style="background:#7f8c8d; font-size: 16px;">חזור לפורום הראשי</button>
+        <div class="header">
+            <h1 style="margin: 0; color: #2c3e50;">⚙️ מרכז ניהול - פרומרקייט</h1>
+            <button onclick="window.location.href='/'" style="background:#34495e; font-size: 16px; padding: 10px 20px;">חזור לפורום הראשי ➔</button>
         </div>
 
-        <div class="section reports-section">
-            <h2 style="color: #c0392b; margin-top: 0;">🚨 דיווחים ופניות כלליות</h2>
+        <div class="tabs">
+            <button class="active" onclick="switchTab('tab-users')">👥 משתמשים ופעילות</button>
+            <button onclick="switchTab('tab-reports')">🚨 דיווחים ופניות</button>
+            <button onclick="switchTab('tab-posts')">🗑️ ניהול אשכולות</button>
+            <button onclick="switchTab('tab-pms')">✉️ צפייה בהודעות פרטיות</button>
+            <button onclick="switchTab('tab-audit')">📖 יומן עורכי תוכן</button>
+        </div>
+
+        <div id="tab-users" class="section active" style="border-right: 5px solid #8e44ad;">
+            <h2 style="color: #d35400;">🔔 ממתינים לאישור</h2>
+            <ul id="pendingUsersList" style="list-style: none; padding: 0;"></ul>
+            <hr>
+            <h2 style="color: #8e44ad;">👥 ניהול משתמשים ומעקב פעילות (ריגול)</h2>
             <table>
-                <thead><tr><th>תאריך</th><th>שולח/מדווח</th><th>סיבת הדיווח / תוכן הפנייה</th><th>מעבר להודעה</th><th>פעולה</th></tr></thead>
+                <thead><tr><th>שם משתמש</th><th>תפקיד</th><th>כתובת IP</th><th>מה עושה עכשיו?</th><th>פעולה</th></tr></thead>
+                <tbody id="allUsersTable"></tbody>
+            </table>
+        </div>
+
+        <div id="tab-reports" class="section" style="border-right: 5px solid #e74c3c;">
+            <h2 style="color: #c0392b;">🚨 דיווחים ופניות כלליות</h2>
+            <table>
+                <thead><tr><th>תאריך</th><th>שולח/מדווח</th><th>סיבת הדיווח / פנייה</th><th>קישור</th><th>פעולה</th></tr></thead>
                 <tbody id="reportsTable"></tbody>
             </table>
         </div>
-        
-        <div class="section" style="border-right: 5px solid #0d9488;">
-            <h2 style="color: #0d9488; margin-top: 0;">📖 יומן פעולות (עורכי תוכן והנהלה)</h2>
+
+        <div id="tab-posts" class="section" style="border-right: 5px solid #2980b9;">
+            <h2 style="color: #2980b9;">🗑️ מחיקת אשכולות (הודעות ראשיות)</h2>
+            <table>
+                <thead><tr><th>תאריך</th><th>כותב</th><th>קטגוריה</th><th>כותרת</th><th>פעולה</th></tr></thead>
+                <tbody id="postsTable"></tbody>
+            </table>
+        </div>
+
+        <div id="tab-pms" class="section" style="border-right: 5px solid #34495e;">
+            <h2 style="color: #34495e;">✉️ מאגר הודעות פרטיות (למנהל בלבד)</h2>
+            <p>כאן תוכל לקרוא את כל השיחות הפרטיות שמתנהלות בפורום בין משתמשים.</p>
+            <table>
+                <thead><tr><th>תאריך</th><th>משולח</th><th>אל (נמען)</th><th>תוכן ההודעה</th></tr></thead>
+                <tbody id="pmsTable"></tbody>
+            </table>
+        </div>
+
+        <div id="tab-audit" class="section" style="border-right: 5px solid #0d9488;">
+            <h2 style="color: #0d9488;">📖 יומן פעולות (עורכי תוכן והנהלה)</h2>
             <table>
                 <thead><tr><th>תאריך</th><th>שם העורך</th><th>סוג הפעולה</th><th>פירוט מדויק</th></tr></thead>
                 <tbody id="auditTable"></tbody>
             </table>
         </div>
 
-        <div class="section" style="border-right: 5px solid #f39c12;">
-            <h2 style="color: #d35400; margin-top: 0;">🔔 משתמשים הממתינים לאישור</h2>
-            <ul id="pendingUsersList" style="list-style: none; padding: 0;"></ul>
-        </div>
-
-        <div class="section" style="border-right: 5px solid #8e44ad;">
-            <h2 style="color: #8e44ad; margin-top: 0;">👥 ניהול משתמשים ותפקידים</h2>
-            <table>
-                <thead><tr><th>שם משתמש</th><th>תפקיד</th><th>תאריך הצטרפות</th><th>פעולה</th></tr></thead>
-                <tbody id="allUsersTable"></tbody>
-            </table>
-        </div>
-
-        <div class="section" style="border-right: 5px solid #2980b9;">
-            <h2 style="color: #2980b9; margin-top: 0;">🗑️ ניהול אשכולות (הודעות ראשיות)</h2>
-            <table>
-                <thead><tr><th>תאריך</th><th>כותב</th><th>קטגוריה</th><th>כותרת</th><th>פעולה</th></tr></thead>
-                <tbody id="postsTable"></tbody>
-            </table>
-        </div>
     </div>
 
     <script>
-        async function loadReports() {
-            const res = await fetch('/api/admin/reports'); const reports = await res.json(); const tbody = document.getElementById('reportsTable');
-            if (reports.length === 0) { tbody.innerHTML = "<tr><td colspan='5' style='text-align:center; font-weight:bold; color:green;'>אין דיווחים פתוחים. הכל שקט! 😎</td></tr>"; return; }
-            tbody.innerHTML = reports.map(r => {
-                const linkHtml = r.postId ? `<a class="link-btn" href="/?thread=${r.postId}" target="_blank">🔗 צפה בהודעה</a>` : '<span style="color:#7f8c8d; font-style:italic;">פנייה כללית</span>';
-                return `<tr><td>${r.date}</td><td><strong>${r.reporter}</strong></td><td style="color: red; font-weight: bold;">${r.reason}</td><td>${linkHtml}</td><td><button class="btn-approve" onclick="resolveReport(${r.id})">סמן כטופל (מחק)</button></td></tr>`;
-            }).join('');
-        }
-        async function resolveReport(id) { if (confirm('האם הדיווח/הפנייה טופלה?')) { await fetch(`/api/admin/reports/${id}`, { method: 'DELETE' }); loadReports(); } }
-
-        async function loadAuditLogs() {
-            const res = await fetch('/api/admin/audit'); const logs = await res.json(); const tbody = document.getElementById('auditTable');
-            if (logs.length === 0) { tbody.innerHTML = "<tr><td colspan='4' style='text-align:center;'>אין רישומים ביומן עדיין.</td></tr>"; return; }
-            tbody.innerHTML = logs.map(l => `<tr class="audit-row"><td>${l.date}</td><td><strong>${l.editor}</strong></td><td>${l.action}</td><td>${l.details}</td></tr>`).join('');
+        function switchTab(tabId) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
         }
 
-        async function loadPendingUsers() {
-            const res = await fetch('/api/admin/pending-users'); const users = await res.json(); const list = document.getElementById('pendingUsersList');
-            if (users.length === 0) { list.innerHTML = "<li style='color: green; font-weight: bold;'>אין משתמשים שממתינים לאישור.</li>"; return; }
-            list.innerHTML = users.map(u => { const safeName = u.replace(/'/g, "\\'"); return `<li style="background: #f8f9fa; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;"><strong style="font-size: 18px;">${u}</strong> <button class="btn-approve" onclick="approveUser('${safeName}')">אשר משתמש זה</button></li>`; }).join('');
-        }
-        async function approveUser(username) { await fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) }); alert("המשתמש אושר בהצלחה!"); loadPendingUsers(); loadAllUsers(); }
-
-        async function loadAllUsers() {
-            const res = await fetch('/api/admin/all-users'); const users = await res.json(); const tbody = document.getElementById('allUsersTable');
-            tbody.innerHTML = users.map(u => {
+        async function loadData() {
+            // משתמשים
+            const uRes = await fetch('/api/admin/all-users'); const users = await uRes.json();
+            const pRes = await fetch('/api/admin/pending-users'); const pending = await pRes.json();
+            
+            document.getElementById('pendingUsersList').innerHTML = pending.length === 0 ? "<li style='color: green; font-weight: bold;'>אין משתמשים שממתינים לאישור.</li>" : 
+                pending.map(u => `<li style="background: #f8f9fa; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;"><strong style="font-size: 18px;">${u}</strong> <button class="btn-approve" onclick="approveUser('${u}')">אשר משתמש זה</button></li>`).join('');
+            
+            document.getElementById('allUsersTable').innerHTML = users.map(u => {
                 let roleStr = u.role === 'admin' ? '👑 מנהל' : (u.role === 'editor' ? '📝 עורך תוכן' : (u.role === 'mod' ? '🛡️ מפקח' : '👤 משתמש'));
                 if(!u.isApproved && u.role !== 'admin') roleStr += ' (ממתין)';
-                const safeName = u.username.replace(/'/g, "\\'");
+                let activity = Date.now() - u.lastActive < 300000 ? `<span style="color:green;">🟢 ${u.currentActivity || 'מחובר'}</span>` : `<span style="color:gray;">לא מחובר</span>`;
                 
                 let promoteBtns = '';
                 if (u.role !== 'admin') {
-                    if (u.role !== 'mod') promoteBtns += `<button class="btn-mod" onclick="setRole('${safeName}', 'mod')">הפוך למפקח</button>`;
-                    if (u.role !== 'editor') promoteBtns += `<button class="btn-editor" onclick="setRole('${safeName}', 'editor')">הפוך לעורך תוכן</button>`;
-                    if (u.role !== 'user') promoteBtns += `<button class="btn-action" style="background:#6B7280;" onclick="setRole('${safeName}', 'user')">הסר תפקיד (רגיל)</button>`;
+                    if (u.role !== 'mod') promoteBtns += `<button class="btn-mod" onclick="setRole('${u.username}', 'mod')">מנה למפקח</button>`;
+                    if (u.role !== 'editor') promoteBtns += `<button class="btn-editor" onclick="setRole('${u.username}', 'editor')">מנה לעורך תורני</button>`;
+                    if (u.role !== 'user') promoteBtns += `<button class="btn-delete" style="background:#6B7280;" onclick="setRole('${u.username}', 'user')">הסר תפקיד</button>`;
                 }
-                
-                return `<tr><td><strong>${u.username}</strong></td><td>${roleStr}</td><td>${u.joinDate}</td><td>${u.role !== 'admin' ? `${promoteBtns} <button class="btn-delete" onclick="deleteUser('${safeName}')">מחק משתמש</button>` : '<span style="color:gray;">לא ניתן לערוך מנהל ראשי</span>'}</td></tr>`;
+                return `<tr><td><strong>${u.username}</strong></td><td>${roleStr}</td><td style="font-family:monospace;">${u.ip || 'לא ידוע'}</td><td>${activity}</td><td>${u.role !== 'admin' ? `${promoteBtns} <button class="btn-delete" onclick="deleteUser('${u.username}')">מחק משתמש</button>` : '<span style="color:gray;">מנהל</span>'}</td></tr>`;
             }).join('');
+
+            // דיווחים
+            const rRes = await fetch('/api/admin/reports'); const reports = await rRes.json();
+            document.getElementById('reportsTable').innerHTML = reports.length === 0 ? "<tr><td colspan='5' style='text-align:center;'>הכל שקט. אין דיווחים.</td></tr>" :
+                reports.map(r => `<tr><td>${r.date}</td><td><strong>${r.reporter}</strong></td><td style="color: red; font-weight: bold;">${r.reason}</td><td>${r.postId ? `<a class="link-btn" href="/?thread=${r.postId}" target="_blank">🔗 הודעה</a>` : 'פנייה כללית'}</td><td><button class="btn-approve" onclick="resolveReport(${r.id})">סמן כטופל</button></td></tr>`).join('');
+
+            // אשכולות
+            const poRes = await fetch('/api/posts'); const posts = await poRes.json();
+            document.getElementById('postsTable').innerHTML = posts.length === 0 ? "<tr><td colspan='5' style='text-align:center;'>אין אשכולות.</td></tr>" : 
+                posts.reverse().map(p => `<tr><td>${p.date}</td><td><strong>${p.author}</strong></td><td>${p.category}</td><td title="${p.content}"><a style="color:#2980b9;" href="/?thread=${p.id}" target="_blank">${p.title}</a></td><td><button class="btn-delete" onclick="deletePost(${p.id})">מחק אשכול</button></td></tr>`).join('');
+
+            // יומן פעולות
+            const aRes = await fetch('/api/admin/audit'); const logs = await aRes.json();
+            document.getElementById('auditTable').innerHTML = logs.length === 0 ? "<tr><td colspan='4' style='text-align:center;'>אין רישומים.</td></tr>" :
+                logs.map(l => `<tr style="background:#f9fafb;"><td>${l.date}</td><td><strong>${l.editor}</strong></td><td>${l.action}</td><td>${l.details}</td></tr>`).join('');
+
+            // הודעות פרטיות (מעקב)
+            const mRes = await fetch('/api/admin/all-messages'); const msgs = await mRes.json();
+            document.getElementById('pmsTable').innerHTML = msgs.length === 0 ? "<tr><td colspan='4' style='text-align:center;'>אין הודעות פרטיות במערכת.</td></tr>" :
+                msgs.map(m => `<tr><td>${m.date}</td><td style="color:#2980b9;"><strong>${m.from}</strong></td><td style="color:#e67e22;"><strong>${m.to}</strong></td><td style="white-space:pre-wrap;">${m.content}</td></tr>`).join('');
         }
 
-        async function setRole(username, role) {
-            if (confirm(`האם לשנות את התפקיד של ${username}?`)) {
-                await fetch(`/api/admin/users/${username}/role`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({role}) }); loadAllUsers();
-            }
-        }
-        async function deleteUser(username) { if (confirm(`למחוק את "${username}" לצמיתות?`)) { await fetch(`/api/admin/users/${username}`, { method: 'DELETE' }); loadAllUsers(); } }
+        async function approveUser(username) { await fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) }); alert("אושר!"); loadData(); }
+        async function setRole(username, role) { if (confirm(`לשנות תפקיד ל-${username}?`)) { await fetch(`/api/admin/users/${username}/role`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({role}) }); loadData(); } }
+        async function deleteUser(username) { if (confirm(`למחוק את "${username}" לצמיתות?`)) { await fetch(`/api/admin/delete-user`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ username }) }); loadData(); } }
+        async function resolveReport(id) { if (confirm('למחוק את הדיווח?')) { await fetch(`/api/admin/reports/${id}`, { method: 'DELETE' }); loadData(); } }
+        async function deletePost(id) { if (confirm('מחיקת אשכול?')) { await fetch(`/api/posts/${id}`, { method: 'DELETE' }); loadData(); } }
 
-        async function loadPosts() {
-            const res = await fetch('/api/posts'); const posts = await res.json(); const tbody = document.getElementById('postsTable');
-            if (posts.length === 0) { tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>אין אשכולות בפורום עדיין.</td></tr>"; return; }
-            tbody.innerHTML = posts.reverse().map(p => `<tr><td>${p.date}</td><td><strong>${p.author}</strong></td><td>${p.category}</td><td title="${p.content}"><a style="color:#2980b9;" href="/?thread=${p.id}" target="_blank">${p.title}</a></td><td><button class="btn-delete" onclick="deletePost(${p.id})">מחק אשכול</button></td></tr>`).join('');
-        }
-        async function deletePost(id) { if (confirm('למחוק אשכול?')) { await fetch(`/api/posts/${id}`, { method: 'DELETE' }); loadPosts(); } }
-
-        window.onload = () => { loadReports(); loadAuditLogs(); loadPendingUsers(); loadAllUsers(); loadPosts(); };
+        window.onload = loadData;
     </script>
 </body>
 </html>
