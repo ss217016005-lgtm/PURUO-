@@ -16,7 +16,11 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const getILTime = () => new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
 
-const defaultDB = { users: [], categories: ["תמונות והסרטות", "עזרה הדדית", "בית המדרש", "הלכה למעשה", "כתבי רבותינו", "קורות דורות", "אקטואליה", "הפורום שלנו", "חדשות בציבור"], posts: [], reports: [], messages: [], auditLogs: [] };
+const newCategoriesList = ["תמונות והסרטות", "עזרה הדדית", "בית המדרש", "הלכה למעשה", "כתבי רבותינו", "קורות דורות", "אקטואליה", "הפורום שלנו", "חדשות בציבור"];
+const defaultDB = { 
+    users: [], categories: newCategoriesList, posts: [], reports: [], messages: [], auditLogs: [],
+    settings: { rules: "ברוכים הבאים לפורום פרומרקייט!\n\n1. יש לשמור על שפה נקייה ומכבדת.\n2. אין לפרסם תוכן פוגעני.\n3. פתיחת נושאים צריכה להיעשות בקטגוריה המתאימה.\n\nגלישה נעימה!", floatingMessage: { text: "", id: 0 } }
+};
 
 let dbCache = null;
 
@@ -28,7 +32,8 @@ function initDB() {
     if (!dbCache.reports) { dbCache.reports = []; needsSave = true; }
     if (!dbCache.messages) { dbCache.messages = []; needsSave = true; }
     if (!dbCache.auditLogs) { dbCache.auditLogs = []; needsSave = true; }
-    if (!dbCache.categories) { dbCache.categories = defaultDB.categories; needsSave = true; }
+    if (!dbCache.categories) { dbCache.categories = newCategoriesList; needsSave = true; }
+    if (!dbCache.settings) { dbCache.settings = defaultDB.settings; needsSave = true; }
     
     if (dbCache.users) {
         dbCache.users.forEach(user => {
@@ -82,6 +87,20 @@ function notifyMentionsAndQuotes(content, author, postTitle, threadId, db) {
         if (u && u.username !== author) u.notifications.push({ text: `${author} ציטט אותך באשכול: "${postTitle}"`, threadId, isNew: true });
     });
 }
+
+// === הגדרות וכללים (חדש!) ===
+app.get('/api/settings', (req, res) => res.json(readDB().settings));
+app.put('/api/admin/settings', (req, res) => {
+    const { username, rules, floatingMessageText } = req.body; const db = readDB();
+    const user = db.users.find(u => u.username === username);
+    if (!user || user.role !== 'admin') return res.status(403).json({ error: "אין הרשאה." });
+    
+    db.settings.rules = rules;
+    if (db.settings.floatingMessage.text !== floatingMessageText) {
+        db.settings.floatingMessage = { text: floatingMessageText, id: Date.now() }; // זיהוי הודעה חדשה
+    }
+    writeDB(db); res.json({ success: true });
+});
 
 app.post('/api/register', (req, res) => {
     const { username, password } = req.body; const db = readDB();
@@ -302,7 +321,7 @@ app.post('/api/report', (req, res) => {
     if (!db.reports) db.reports = []; db.reports.push({ id: Date.now(), reporter, postId, replyId, reason, date: getILTime() }); writeDB(db); res.json({ success: true });
 });
 
-// === קטגוריות למנהלים ===
+// קטגוריות
 app.post('/api/admin/categories', (req, res) => {
     const { username, newCat } = req.body; const db = readDB();
     const user = db.users.find(u => u.username === username);
@@ -310,29 +329,22 @@ app.post('/api/admin/categories', (req, res) => {
     if (!db.categories.includes(newCat)) { db.categories.push(newCat); writeDB(db); }
     res.json({ success: true });
 });
-
 app.put('/api/admin/categories', (req, res) => {
     const { username, oldCat, newCat } = req.body; const db = readDB();
     const user = db.users.find(u => u.username === username);
     if (!user || user.role !== 'admin') return res.status(403).json({ error: "אין הרשאה" });
     const idx = db.categories.indexOf(oldCat);
-    if (idx > -1) {
-        db.categories[idx] = newCat;
-        db.posts.forEach(p => { if (p.category === oldCat) p.category = newCat; });
-        writeDB(db);
-    }
+    if (idx > -1) { db.categories[idx] = newCat; db.posts.forEach(p => { if (p.category === oldCat) p.category = newCat; }); writeDB(db); }
     res.json({ success: true });
 });
-
 app.delete('/api/admin/categories', (req, res) => {
     const { username, catName } = req.body; const db = readDB();
     const user = db.users.find(u => u.username === username);
     if (!user || user.role !== 'admin') return res.status(403).json({ error: "אין הרשאה" });
-    db.categories = db.categories.filter(c => c !== catName);
-    writeDB(db); res.json({ success: true });
+    db.categories = db.categories.filter(c => c !== catName); writeDB(db); res.json({ success: true });
 });
 
-// נתיבי הנהלה כלליים
+// נתיבי הנהלה
 app.get('/api/admin/reports', (req, res) => res.json(readDB().reports || []));
 app.delete('/api/admin/reports/:id', (req, res) => { const db = readDB(); db.reports = (db.reports || []).filter(r => r.id !== parseInt(req.params.id)); writeDB(db); res.json({ success: true }); });
 app.get('/api/admin/audit', (req, res) => res.json(readDB().auditLogs.reverse() || []));
