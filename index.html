@@ -151,7 +151,7 @@
     </div>
 
     <script>
-        let currentUser = null, currentUserRole = null, postsData = [], usersInfo = {};
+        let currentUser = null, currentUserRole = null, postsData = [], usersInfo = {}, confirmActionCb = null;
         let readThreads = JSON.parse(localStorage.getItem('readThreads')) || {};
         window.currentConvos = {}; let currentChatPartner = null; let currentChatSubject = null;
         let lastUnreadCount = 0, lastUnreadMsgs = 0;
@@ -163,7 +163,8 @@
         
         function showMsg(t, txt, hm=true) { document.getElementById('sysModalTitle').innerText = t; document.getElementById('sysModalText').innerHTML = hm ? txt : `<div style="white-space:pre-wrap;">${txt}</div>`; document.getElementById('sysModalBtns').innerHTML = `<button onclick="closeModal()">סגור</button>`; document.getElementById('sysModal').classList.remove('hidden'); }
         function closeModal() { document.getElementById('sysModal').classList.add('hidden'); }
-        function showInputMsg(txt, cb) { document.getElementById('sysModalTitle').innerText='הזנה'; document.getElementById('sysModalText').innerHTML=`${txt}<br><br><input type="text" id="modalInput" style="width:100%;">`; document.getElementById('sysModalBtns').innerHTML=`<button onclick="closeModal(); ${cb.name}(document.getElementById('modalInput').value);" style="background:#10B981; margin-left:10px;">שמור</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden'); setTimeout(()=>document.getElementById('modalInput').focus(),100); }
+        function showInputMsg(txt, cbName) { document.getElementById('sysModalTitle').innerText='הזנה'; document.getElementById('sysModalText').innerHTML=`${txt}<br><br><input type="text" id="modalInput" style="width:100%;">`; document.getElementById('sysModalBtns').innerHTML=`<button onclick="closeModal(); window['${cbName}'](document.getElementById('modalInput').value);" style="background:#10B981; margin-left:10px;">שמור</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden'); setTimeout(()=>document.getElementById('modalInput').focus(),100); }
+        function showConfirm(txt, cb) { confirmActionCb = cb; document.getElementById('sysModalTitle').innerText='אישור'; document.getElementById('sysModalText').innerText=txt; document.getElementById('sysModalBtns').innerHTML=`<button onclick="closeModal(); confirmActionCb();" style="background:#EF4444; margin-left:10px;">כן</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden'); }
 
         window.showRules = function() {
             showMsg('כללי הפורום', `
@@ -194,7 +195,6 @@
             let prevHtml; do { prevHtml = html; html = html.replace(/\[quote="(.*?)"\]([\s\S]*?)\[\/quote\]/gi, '<div class="quote-box"><strong>מאת $1:</strong><br>$2</div>'); } while (html !== prevHtml); return html;
         }
 
-        // התיקון המשמעותי לחזרת השרשורים: שימוש נכון ב-URLSearchParams
         window.addEventListener('popstate', () => { 
             const params = new URLSearchParams(window.location.search); 
             if (params.get('thread')) openThread(parseInt(params.get('thread')), true); 
@@ -206,7 +206,7 @@
         async function authCall(url, u, p) { if (!u||!p) return showMsg('שגיאה', 'מלא הכל', false); const res = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: u, password: p}) }); return await res.json(); }
         
         async function register() { 
-            if (!document.getElementById('agreeRules').checked) return showMsg('שגיאה', 'חובה לקרוא ולאשר את כללי הפורום כדי להירשם.', false);
+            if (!document.getElementById('agreeRules').checked) return showMsg('שגיאה', 'חובה לאשר את כללי הפורום כדי להירשם.', false);
             if(isSubmitting) return; isSubmitting=true; document.getElementById('regBtn').disabled=true; 
             const data = await authCall('/api/register', document.getElementById('username').value, document.getElementById('password').value); 
             if(data.message) showMsg('הרשמה', data.message); else showMsg('שגיאה', data.error); 
@@ -214,7 +214,7 @@
         }
         
         async function login() { 
-            if (!document.getElementById('agreeRules').checked) return showMsg('שגיאה', 'חובה לאשר את הכללים גם בהתחברות.', false);
+            if (!document.getElementById('agreeRules').checked) return showMsg('שגיאה', 'חובה לאשר את כללי הפורום גם בהתחברות.', false);
             if(isSubmitting) return; isSubmitting=true; document.getElementById('loginBtn').disabled=true; 
             const data = await authCall('/api/login', document.getElementById('username').value, document.getElementById('password').value); 
             if (data.message) { currentUser = data.username; const rem = document.getElementById('rememberMe').checked; (rem?localStorage:sessionStorage).setItem('forumUser', currentUser); enterForum(); } 
@@ -245,7 +245,13 @@
 
         async function updatePing(typingTarget = null) {
             if (!currentUser) return;
-            const res = await fetch('/api/ping', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, typingTo: typingTarget}) });
+            let activity = 'גולש בפורום הראשי';
+            if (!document.getElementById('singleThreadView').classList.contains('hidden')) {
+                const tId = parseInt(document.getElementById('singleThreadView').getAttribute('data-current-id'));
+                const p = postsData.find(x => x.id === tId); if (p) activity = 'צופה באשכול: ' + p.title;
+            } else if (!document.getElementById('userProfileView').classList.contains('hidden')) { activity = 'צופה בפרופיל משתמש'; }
+
+            const res = await fetch('/api/ping', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, typingTo: typingTarget, currentActivity: activity}) });
             const data = await res.json(); document.getElementById('onlineCount').innerText = data.onlineUsers.length;
             document.getElementById('onlineUsersList').innerHTML = data.onlineUsers.map(u => `<li style="padding: 5px 0; border-bottom: 1px solid #eee; cursor:pointer;" onclick="showUserProfile('${u}')">🟢 <span class="clickable-user">${u}</span></li>`).join('');
             
@@ -290,7 +296,7 @@
             });
             if (found === 0) userPostsHtml += "<p>טרם כתב הודעות.</p>";
             let roleStr = info.role === 'admin' ? "👑 מנהל ראשי" : (info.role === 'editor' ? "📝 עורך תוכן" : (info.role === 'mod' ? "🛡️ צוות פיקוח" : (info.totalLikes >= 50 ? "🏆 משתמש מוביל" : (info.isVeteran ? "🌟 משתמש ותיק" : "👤 משתמש רגיל"))));
-            document.getElementById('profileContentArea').innerHTML = `<h2 style="color:var(--primary); margin-top:0;">פרופיל משתמש: ${username}</h2><div style="font-size:16px; line-height:1.8; margin-bottom: 20px;"><strong>סטטוס:</strong> ${roleStr}<br><strong>הצטרף:</strong> ${info.joinDate}<br><strong>נראה לאחרונה:</strong> ${timeAgo(info.lastSeen)}<br><strong>לייקים:</strong> ❤️ ${info.totalLikes}<br>${currentUser !== username ? `<button class="btn-action" style="margin-top:10px; background:var(--primary); color:white;" onclick="openNewChat('${username}')">✉️ שלח הודעה פרטית</button>` : ''}</div>${userPostsHtml}`;
+            document.getElementById('profileContentArea').innerHTML = `<h2 style="color:var(--primary); margin-top:0;">פרופיל משתמש: ${username}</h2><div style="font-size:16px; line-height:1.8; margin-bottom: 20px;"><strong>סטטוס:</strong> ${roleStr}<br><strong>הצטרף:</strong> ${info.joinDate}<br><strong>נראה לאחרונה:</strong> ${timeAgo(info.lastSeen)}<br><strong>לייקים שקיבל:</strong> ❤️ ${info.totalLikes}<br>${currentUser !== username ? `<button class="btn-action" style="margin-top:10px; background:var(--primary); color:white;" onclick="openNewChat('${username}')">✉️ שלח הודעה פרטית</button>` : ''}</div>${userPostsHtml}`;
         };
         window.closeProfileAndReturn = function() { document.getElementById('userProfileView').classList.add('hidden'); renderThreads(); };
 
@@ -319,7 +325,7 @@
             if(!query || !threadId) return openThread(threadId, true);
             const p = postsData.find(x => x.id === threadId);
             
-            let html = `<div style="display:flex; justify-content:flex-end; margin-bottom:15px;"><button onclick="openThread(${threadId}, true)" style="background:#6B7280;">בטל חיפוש</button></div>`;
+            let html = `<div style="display:flex; justify-content:flex-end; margin-bottom:15px;"><button onclick="openThread(${threadId}, true)" style="background:#6B7280;">בטל חיפוש באשכול</button></div>`;
             if (p.content.toLowerCase().includes(query) || p.title.toLowerCase().includes(query)) html += renderPostBlock(p, null, true, p);
             const rResults = p.replies.filter(r => r.content.toLowerCase().includes(query));
             if(rResults.length > 0) html += `<h3 style="margin-top: 30px;">💬 תוצאות בתגובות:</h3><div id="repliesList">${rResults.map(r => renderPostBlock(r, r.id, false, p)).join('')}</div>`;
@@ -327,7 +333,7 @@
             document.getElementById('threadContentArea').innerHTML = html;
         };
 
-        // --- הודעות פרטיות (תמיכה בכמה שיחות עם אותו אדם לפי נושא) ---
+        // --- הודעות פרטיות ---
         async function openInbox() {
             const res = await fetch(`/api/messages/${currentUser}`); const msgs = await res.json(); document.getElementById('msgBadge').classList.add('hidden'); 
             window.currentConvos = {}; 
@@ -335,11 +341,10 @@
                 const p = m.from === currentUser ? m.to : m.from; 
                 const subj = m.subject || 'שיחה כללית';
                 const key = p + '|||' + subj;
-                if (!currentConvos[key]) currentConvos[key]=[]; 
-                currentConvos[key].push(m); 
+                if (!currentConvos[key]) currentConvos[key]=[]; currentConvos[key].push(m); 
             });
             
-            let html = `<div style="display:flex; gap:15px; height:400px;"><div style="flex:1; border-left:1px solid #ddd; padding-left:10px; overflow-y:auto;"><strong>אנשי קשר ונושאים:</strong><br><br>`;
+            let html = `<div style="display:flex; gap:15px; height:400px;"><div style="flex:1; border-left:1px solid #ddd; padding-left:10px; overflow-y:auto;"><strong>אנשי קשר:</strong><br><br>`;
             for (let key in currentConvos) {
                 const [p, subj] = key.split('|||');
                 const unread = currentConvos[key].filter(m => m.from === p && !m.read).length;
@@ -380,7 +385,11 @@
                 const isMe = m.from === currentUser;
                 const likesHtml = m.likes.length > 0 ? `<div class="pm-thanks">❤️ ${m.likes.length}</div>` : '';
                 const likeBtn = !isMe ? `<button style="background:none; border:none; color:#be185d; cursor:pointer; font-size:12px; margin-top:5px;" onclick="likePM(${m.id})">👍 תודה</button>` : '';
-                let fHtml = ''; if(m.fileUrls) m.fileUrls.forEach(u => fHtml += `<br><a href="${u}" target="_blank" style="font-size:11px; background:#eee; padding:2px 5px; border-radius:3px;">📎 קובץ מצורף</a>`);
+                let fHtml = ''; if(m.fileUrls) m.fileUrls.forEach(u => {
+                    const ext = u.split('.').pop().toLowerCase();
+                    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) { fHtml += `<br><img src="${u}" style="max-width:100%; max-height:150px; border-radius:5px;">`; }
+                    else { fHtml += `<br><a href="${u}" target="_blank" style="font-size:11px; background:#eee; padding:2px 5px; border-radius:3px;">📎 קובץ</a>`; }
+                });
                 html += `<div class="chat-bubble" style="background:${isMe?'#e0e7ff':'#fff'}; border:1px solid ${isMe?'#c7d2fe':'#e5e7eb'}; align-self:${isMe?'flex-end':'flex-start'};">
                             <strong style="font-size:12px; color:gray;">${m.from}</strong><br>${m.content.replace(/\n/g, '<br>')}${fHtml}<div style="font-size:10px; color:#aaa; margin-top:4px;">${m.date}</div>
                             ${likesHtml} ${likeBtn}
@@ -393,12 +402,14 @@
         window.likePM = async function(id) { await fetch(`/api/messages/${id}/like`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({username: currentUser}) }); updatePing(); }
         
         window.openNewChat = function(toUser) {
-            showInputMsg(`מה נושא השיחה החדשה עם ${toUser}?`, async (subj) => {
-                if(!subj) subj = 'שיחה כללית';
-                openInbox().then(() => { 
-                    const key = toUser + '|||' + subj;
-                    if (window.currentConvos[key]) openChat(toUser, subj); else { window.currentConvos[key]=[]; openChat(toUser, subj); }
-                });
+            showInputMsg(`מה נושא השיחה החדשה עם ${toUser}?`, 'submitNewChat');
+            window.submitNewChatUser = toUser;
+        }
+        window.submitNewChat = function(subj) {
+            if(!subj) subj = 'שיחה כללית';
+            openInbox().then(() => { 
+                const key = window.submitNewChatUser + '|||' + subj;
+                if (window.currentConvos[key]) openChat(window.submitNewChatUser, subj); else { window.currentConvos[key]=[]; openChat(window.submitNewChatUser, subj); }
             });
         }
         
@@ -478,8 +489,7 @@
             isSubmitting = true; document.getElementById('postThreadBtn').disabled = true;
             const fd = new FormData(); fd.append('author', currentUser); fd.append('title', title); fd.append('content', content); fd.append('category', cat);
             if (fileInput.files) { for(let i=0; i<fileInput.files.length; i++) fd.append('attachedFiles', fileInput.files[i]); }
-            await fetch('/api/posts', { method: 'POST', body: fd }); 
-            toggleNewThreadForm(); document.getElementById('newThreadTitle').value = ''; document.getElementById('newThreadContent').value = ''; fileInput.value = ''; history.pushState({}, '', '/'); loadPosts();
+            await fetch('/api/posts', { method: 'POST', body: fd }); toggleNewThreadForm(); document.getElementById('newThreadTitle').value = ''; document.getElementById('newThreadContent').value = ''; fileInput.value = ''; history.pushState({}, '', '/'); loadPosts();
             isSubmitting = false; document.getElementById('postThreadBtn').disabled = false;
         }
 
@@ -511,7 +521,8 @@
             const renameBtn = (isMain && canEditPostMeta) ? `<button class="btn-action" onclick="triggerRename(${p.id}, '${p.title.replace(/'/g,"\\'")}')">✏️ שנה כותרת</button>` : '';
             const lockBtn = (isMain && canMod) ? `<button class="btn-action" onclick="triggerLock(${p.id})">${p.isLocked ? '🔓 שחרר' : '🔒 נעל'}</button>` : '';
             const deleteBtn = (!isMain && currentUserRole === 'admin') ? `<button class="btn-action" style="color:red;" onclick="deleteReply(${parentPost.id}, ${p.id})">🗑️ מחק</button>` : '';
-            const likesList = p.likes.length > 0 ? 'לייקים מ: ' + p.likes.join(', ') : 'תהיה הראשון לעשות לייק!';
+            
+            const likesList = p.likes.length > 0 ? 'לייקים מ: \n' + p.likes.join('\n') : 'תהיה הראשון לעשות לייק!';
 
             return `
             <div class="post-container" id="post-${replyId || p.id}">
@@ -522,7 +533,7 @@
                     <div style="font-size: 15px; white-space: pre-wrap; line-height: 1.6;">${parseBBCode(p.content)}</div>
                     ${filesHtml}
                     <div style="margin-top: auto; padding-top: 15px; display: flex; gap: 8px; border-top: 1px solid #e5e7eb; flex-wrap: wrap;">
-                        <div class="tooltip"><button class="btn-action ${hasLiked ? 'liked' : ''}" onclick="toggleLike(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">👍 נהניתי (${p.likes.length})</button><span class="tooltiptext">${likesList}</span></div>
+                        <button class="btn-action ${hasLiked ? 'liked' : ''}" title="${likesList}" onclick="toggleLike(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">👍 נהניתי (${p.likes.length})</button>
                         ${(!parentPost || !parentPost.isLocked) ? `<button class="btn-action" onclick="insertQuote('${p.author}', \`${p.content.replace(/`/g, "'")}\`)">💬 צטט</button>` : ''}
                         <button class="btn-action" style="color:#b91c1c;" onclick="triggerReport(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">🚨 דווח</button>
                         ${canEditContent ? `<button class="btn-action" style="color:#b45309;" onclick="triggerEdit(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">✏️ עריכת תוכן</button>` : ''}
@@ -588,15 +599,17 @@
             const selectOptions = Array.from(document.getElementById('categorySelect').options).filter(o => o.value).map(o => `<option value="${o.value}">${o.text.replace('📁 ', '')}</option>`).join('');
             document.getElementById('sysModalTitle').innerText = 'העברת אשכול'; document.getElementById('sysModalText').innerHTML = `<select id="moveCatSelect" style="width:100%;">${selectOptions}</select>`; document.getElementById('sysModalBtns').innerHTML = `<button onclick="closeModal(); submitMove(${postId}, document.getElementById('moveCatSelect').value);" style="background:#10B981; margin-left:10px;">העבר</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden');
         }
-        async function submitMove(postId, newCategory) { await fetch('/api/posts/move', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, newCategory}) }); showMsg('בוצע', 'הועבר!'); loadPosts(); }
+        window.submitMove = async function(postId, newCategory) { await fetch('/api/posts/move', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, newCategory}) }); showMsg('בוצע', 'הועבר!'); loadPosts(); }
 
-        function triggerRename(postId, oldTitle) { showInputMsg(`שנה כותרת מ- "${oldTitle}":`, async (newTitle) => { if(!newTitle) return; await fetch('/api/posts/rename', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, newTitle}) }); loadPosts(); }); }
+        function triggerRename(postId, oldTitle) { showInputMsg(`שנה כותרת מ- "${oldTitle}":`, 'submitRename'); window.submitRenamePostId = postId; }
+        window.submitRename = async function(newTitle) { if(!newTitle) return; await fetch('/api/posts/rename', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId: window.submitRenamePostId, newTitle}) }); loadPosts(); }
 
         let currentActionPostId, currentActionReplyId;
-        function triggerReport(postId, replyId) { currentActionPostId = postId; currentActionReplyId = replyId; showInputMsg("מה סיבת הדיווח?", submitReport); }
-        async function submitReport(reason) { if (!reason) return; await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({reporter: currentUser, postId: currentActionPostId, replyId: currentActionReplyId, reason}) }); showMsg("נשלח", "הדיווח נשלח!"); }
+        function triggerReport(postId, replyId) { currentActionPostId = postId; currentActionReplyId = replyId; showInputMsg("מה סיבת הדיווח?", 'submitReport'); }
+        window.submitReport = async function(reason) { if (!reason) return; await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({reporter: currentUser, postId: currentActionPostId, replyId: currentActionReplyId, reason}) }); showMsg("נשלח", "הדיווח נשלח!"); }
 
-        function triggerContactUs() { showInputMsg("במה נוכל לעזור? הפנייה תגיע לצוות הניהול:", async (text) => { if(!text) return; await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({reporter: currentUser, postId: null, replyId: null, reason: "פניית צור קשר: " + text}) }); showMsg("נשלח", "פנייתך התקבלה."); }); }
+        function triggerContactUs() { showInputMsg("במה נוכל לעזור? הפנייה תגיע לצוות הניהול:", 'submitContactUs'); }
+        window.submitContactUs = async function(text) { if(!text) return; await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({reporter: currentUser, postId: null, replyId: null, reason: "פניית צור קשר: " + text}) }); showMsg("נשלח", "פנייתך התקבלה."); }
 
         function triggerEdit(postId, replyId) { 
             currentActionPostId = postId; currentActionReplyId = replyId; 
@@ -605,7 +618,7 @@
             document.getElementById('sysModalTitle').innerText = 'עריכה'; document.getElementById('sysModalText').innerHTML = `<textarea id="modalInput" rows="5" style="width:100%;"></textarea>`; document.getElementById('modalInput').value = currentContent;
             document.getElementById('sysModalBtns').innerHTML = `<button onclick="closeModal(); submitEdit(document.getElementById('modalInput').value);" style="background:#10B981; margin-left:10px;">שמור</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden'); 
         }
-        async function submitEdit(newContent) { if (!newContent) return; await fetch('/api/posts/edit', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId: currentActionPostId, replyId: currentActionReplyId, newContent}) }); loadPosts(); }
+        window.submitEdit = async function(newContent) { if (!newContent) return; await fetch('/api/posts/edit', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId: currentActionPostId, replyId: currentActionReplyId, newContent}) }); loadPosts(); }
     </script>
 </body>
 </html>
