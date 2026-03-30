@@ -46,12 +46,12 @@
         </div>
 
         <div id="tab-users" class="section active" style="border-right: 5px solid #8e44ad;">
-            <h2 style="color: #d35400;">🔔 ממתינים לאישור (רק מי שאימת אימייל)</h2>
+            <h2 style="color: #d35400;">🔔 ממתינים לאישור הנהלה</h2>
             <ul id="pendingUsersList" style="list-style: none; padding: 0;"></ul>
             <hr>
             <h2 style="color: #8e44ad;">👥 ניהול משתמשים ומעקב פעילות (ריגול)</h2>
             <table>
-                <thead><tr><th>שם משתמש</th><th>כתובת אימייל</th><th>תפקיד</th><th>כתובת IP</th><th>מה עושה עכשיו?</th><th>פעולה</th></tr></thead>
+                <thead><tr><th>שם משתמש</th><th>תפקיד</th><th>כתובת IP</th><th>מה עושה עכשיו?</th><th>פעולה</th></tr></thead>
                 <tbody id="allUsersTable"></tbody>
             </table>
         </div>
@@ -155,7 +155,7 @@
             
             const pendingList = document.getElementById('pendingUsersList');
             pendingList.innerHTML = '';
-            if (pending.length === 0) pendingList.innerHTML = "<li style='color: green; font-weight: bold;'>אין משתמשים שאימתו אימייל וממתינים לאישור.</li>";
+            if (pending.length === 0) pendingList.innerHTML = "<li style='color: green; font-weight: bold;'>אין משתמשים שממתינים לאישור.</li>";
             else {
                 pending.forEach(u => {
                     const li = document.createElement('li'); li.style = "background: #f8f9fa; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;";
@@ -177,18 +177,12 @@
                     if (u.role !== 'user') promoteBtns += `<button class="btn-delete" style="background:#6B7280;" onclick="setRole('${u.username.replace(/'/g, "\\'")}', 'user')">הסר תפקיד</button>`;
                 }
                 
-                let verifyBtn = '';
-                if (!u.isEmailVerified && u.role !== 'admin') {
-                    verifyBtn = `<button class="btn-approve" style="background:#f39c12;" onclick="forceVerifyEmail('${u.username.replace(/'/g, "\\'")}')">וותר על אימות מיל</button> `;
-                }
-
                 return `<tr>
                     <td><strong>${u.username.replace(/</g, "&lt;")}</strong></td>
-                    <td style="direction:ltr; text-align:left;">${u.email || 'אין'} <br> <small style="font-weight:bold; color:${u.isEmailVerified ? 'green' : 'red'};">${u.isEmailVerified ? '✅ אומת' : '❌ לא אומת'}</small></td>
                     <td>${roleStr}</td>
                     <td style="font-family:monospace;">${u.ip || 'לא ידוע'}</td>
                     <td>${activity}</td>
-                    <td>${verifyBtn}${u.role !== 'admin' ? `${promoteBtns} <button class="btn-delete" onclick="deleteUser('${u.username.replace(/'/g, "\\'")}')">מחק</button>` : '<span style="color:gray;">מנהל</span>'}</td>
+                    <td>${u.role !== 'admin' ? `${promoteBtns} <button class="btn-delete" onclick="deleteUser('${u.username.replace(/'/g, "\\'")}')">מחק</button>` : '<span style="color:gray;">מנהל</span>'}</td>
                 </tr>`;
             }).join('');
 
@@ -238,13 +232,6 @@
         function resetPMs() {
             document.getElementById('pmSearchU1').value = ''; document.getElementById('pmSearchU2').value = ''; document.getElementById('pmSearchKw').value = '';
             renderPMs(allPmsCache);
-        }
-
-        async function forceVerifyEmail(username) {
-            if (confirm(`לוותר ל-${username} על אימות האימייל ידנית? המשתמש יעבור מיד לרשימת הממתינים לאישור.`)) {
-                await fetch('/api/admin/verify-email', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ adminUser, targetUser: username }) });
-                loadData();
-            }
         }
 
         async function addCategory() { const val = document.getElementById('newCatInput').value; if(!val) return; await fetch('/api/admin/categories', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, newCat:val}) }); document.getElementById('newCatInput').value = ''; loadData(); }
