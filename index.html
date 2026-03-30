@@ -364,7 +364,7 @@
         };
         window.closeProfileAndReturn = function() { document.getElementById('userProfileView').classList.add('hidden'); renderThreads(); };
 
-        // === פונקציות מאגר הקישורים (אחסון) ===
+        // === פונקציות מאגר הקישורים (מעודכן: ללא אפשרות העתקה) ===
         window.openLinkArchive = function() {
             document.getElementById('threadsView').classList.add('hidden'); document.getElementById('singleThreadView').classList.add('hidden'); document.getElementById('userProfileView').classList.add('hidden'); document.getElementById('searchContainer').classList.add('hidden');
             document.getElementById('linkArchiveView').classList.remove('hidden');
@@ -374,11 +374,13 @@
         window.refreshLinks = async function() {
             const res = await fetch('/api/links'); const links = await res.json();
             const canDelete = currentUserRole === 'admin' || currentUserRole === 'mod';
+            
+            // הכפתור החדש - מוסתר בתצוגה, בלתי ניתן לסימון, ופותח את החלון רק בלחיצה
             document.getElementById('linksContainer').innerHTML = links.length ? links.reverse().map(l => `
                 <div style="background:white; border:1px solid #ddd; padding:15px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
                     <h3 style="margin:0 0 10px 0; color:var(--primary);">${l.title}</h3>
-                    <a href="${l.url}" target="_blank" style="color:#0ea5e9; font-weight:bold; text-decoration:underline; word-break:break-all;">${l.url}</a>
-                    <div style="font-size:11px; color:#888; margin-top:10px; border-top:1px solid #eee; padding-top:5px; display:flex; justify-content:space-between; align-items:center;">
+                    <span onclick="window.open('${l.url.replace(/'/g, "\\'")}', '_blank')" style="color:white; background:var(--primary); padding:6px 15px; border-radius:5px; font-weight:bold; cursor:pointer; display:inline-block; user-select:none; -webkit-user-select:none; transition:0.2s;" onmouseover="this.style.background='#3730a3'" onmouseout="this.style.background='var(--primary)'">🌐 לחץ כאן למעבר</span>
+                    <div style="font-size:11px; color:#888; margin-top:15px; border-top:1px solid #eee; padding-top:5px; display:flex; justify-content:space-between; align-items:center;">
                         <span>הועלה ע"י: <strong class="clickable-user" onclick="showUserProfile('${l.author}')">${l.author}</strong> | ${l.date}</span>
                         ${canDelete ? `<button onclick="deleteLink(${l.id})" style="background:none; color:red; border:none; cursor:pointer;">🗑️ מחק</button>` : ''}
                     </div>
