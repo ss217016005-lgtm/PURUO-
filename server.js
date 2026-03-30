@@ -2,7 +2,6 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,24 +16,9 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const getILTime = () => new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
 
-// הגדרת חיבור לאימייל - עם מעקף לחסימות של שרתי ענן (פורט 465 מאובטח)
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, 
-    auth: {
-        user: 'SS217016005@gmail.com', 
-        pass: 'uxic xwss vgob ovoq'
-    },
-    tls: {
-        // מונע נפילה במקרה של תעודות SSL פנימיות בשרת הענן
-        rejectUnauthorized: false
-    }
-});
-
 const newCategoriesList = ["תמונות והסרטות", "עזרה הדדית", "בית המדרש", "הלכה למעשה", "כתבי רבותינו", "קורות דורות", "אקטואליה", "הפורום שלנו", "חדשות בציבור"];
 const defaultDB = { 
-    users: [], categories: newCategoriesList, posts: [], reports: [], messages: [], auditLogs: [],
+    users: [], categories: newCategoriesList, posts: [], reports: [], messages: [], auditLogs: [], links: [],
     settings: { rules: "ברוכים הבאים לפורום פרומרקייט!\n\n1. יש לשמור על שפה נקייה ומכבדת.\n2. אין לפרסם תוכן פוגעני.\n3. פתיחת נושאים צריכה להיעשות בקטגוריה המתאימה.\n\nגלישה נעימה!", floatingMessage: { text: "", color: "#f59e0b", id: 0 } }
 };
 
@@ -50,6 +34,7 @@ function initDB() {
     if (!dbCache.auditLogs) { dbCache.auditLogs = []; needsSave = true; }
     if (!dbCache.categories) { dbCache.categories = newCategoriesList; needsSave = true; }
     if (!dbCache.settings) { dbCache.settings = defaultDB.settings; needsSave = true; }
+    if (!dbCache.links) { dbCache.links = []; needsSave = true; }
     if (!dbCache.settings.floatingMessage.color) { dbCache.settings.floatingMessage.color = "#f59e0b"; needsSave = true; }
     
     if (dbCache.users) {
@@ -60,7 +45,6 @@ function initDB() {
             if (user.totalLikes === undefined) { user.totalLikes = 0; needsSave = true; }
             if (user.veteranProgress === undefined) { user.veteranProgress = 0; needsSave = true; }
             if (user.lastActive === undefined) { user.lastActive = user.lastSeen || Date.now(); needsSave = true; }
-            if (user.isEmailVerified === undefined) { user.isEmailVerified = true; needsSave = true; } 
         });
     }
     
@@ -93,6 +77,7 @@ function notifyMentionsAndQuotes(content, author, postTitle, threadId, db) {
     });
 }
 
+// הגדרות מערכת
 app.get('/api/settings', (req, res) => res.json(readDB().settings));
 app.put('/api/admin/settings', (req, res) => {
     const { username, rules, floatingMessageText, floatingMessageColor } = req.body; const db = readDB();
@@ -105,91 +90,46 @@ app.put('/api/admin/settings', (req, res) => {
     writeDB(db); res.json({ success: true });
 });
 
-// === נתיב אימות אימייל ===
-app.get('/api/verify', (req, res) => {
-    const { token, user } = req.query;
-    const db = readDB();
-    const targetUser = db.users.find(u => u.username === user && u.verificationToken === token);
-    
-    if (targetUser) {
-        targetUser.isEmailVerified = true;
-        targetUser.verificationToken = null;
-        writeDB(db);
-        res.send(`<div style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px; direction: rtl;">
-            <h1 style="color: #4F46E5;">האימייל אומת בהצלחה! 🎉</h1>
-            <p>החשבון שלך <strong>${user}</strong> אומת כראוי. ההנהלה תאשר את חשבונך בקרוב.</p>
-            <a href="/" style="display: inline-block; padding: 10px 20px; background: #10B981; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">חזור לפורום</a>
-        </div>`);
-    } else {
-        res.status(400).send(`<div style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px; direction: rtl;"><h1 style="color: #EF4444;">שגיאה באימות ❌</h1><p>הקישור לא חוקי או שפג תוקפו.</p></div>`);
-    }
-});
-
-// === נתיב למנהל לוותר על אימות אימייל ידנית ===
-app.post('/api/admin/verify-email', (req, res) => {
-    const { adminUser, targetUser } = req.body; const db = readDB();
-    const admin = db.users.find(u => u.username === adminUser);
-    if (!admin || admin.role !== 'admin') return res.status(403).json({ error: "אין הרשאה." });
-    
-    const userToVerify = db.users.find(u => u.username === targetUser);
-    if (userToVerify) {
-        userToVerify.isEmailVerified = true;
-        userToVerify.verificationToken = null;
-        writeDB(db);
-        res.json({ success: true });
-    } else {
-        res.status(404).json({ error: "משתמש לא נמצא." });
-    }
-});
-
-// === הרשמה חדשה עם אימייל ===
+// הרשמה פשוטה
 app.post('/api/register', (req, res) => {
-    const { username, password, email } = req.body; const db = readDB();
+    const { username, password } = req.body; const db = readDB();
     if (db.users.find(u => u.username === username)) return res.status(400).json({ error: "שם המשתמש כבר קיים." });
-    if (db.users.find(u => u.email === email)) return res.status(400).json({ error: "האימייל הזה כבר רשום במערכת." });
-
-    const verificationToken = Date.now().toString(36) + Math.random().toString(36).substr(2);
 
     db.users.push({ 
-        username, password, email, 
-        isApproved: false, isEmailVerified: false, verificationToken: verificationToken,
+        username, password, 
+        isApproved: false, 
         role: db.users.length === 0 ? 'admin' : 'user', 
         joinDate: getILTime().split(',')[0], lastSeen: Date.now(), lastActive: Date.now(), 
         notifications: [], totalLikes: 0, veteranProgress: 0, typingTo: null, typingExpires: 0 
     });
     writeDB(db); 
-
-    const verifyLink = `https://${req.headers.host}/api/verify?token=${verificationToken}&user=${encodeURIComponent(username)}`;
-    const mailOptions = {
-        from: '"פורום פרומרקייט" <no-reply@fromarket.com>',
-        to: email,
-        subject: 'אימות הרשמה לפורום פרומרקייט',
-        html: `<div style="direction: rtl; text-align: right; font-family: Arial;">
-            <h2>שלום ${username}!</h2>
-            <p>תודה שנרשמת לפורום פרומרקייט.</p>
-            <p>כדי שנוכל להעביר את חשבונך לאישור הנהלה, עליך לאמת את כתובת האימייל שלך בלחיצה על הקישור הבא:</p>
-            <p><a href="${verifyLink}" style="background: #4F46E5; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px;">אמת את חשבוני</a></p>
-            <p>או העתק את הקישור הבא לדפדפן:</p>
-            <p dir="ltr"><small>${verifyLink}</small></p>
-        </div>`
-    };
-
-    transporter.sendMail(mailOptions, (error, info) => {
-        if (error) console.error("שגיאה בשליחת מייל:", error);
-    });
-
-    res.json({ message: "נרשמת בהצלחה! שלחנו לך אימייל לאימות (בדוק גם בתיקיית הספאם/קידומי מכירות). לאחר האימות תוכל להמתין לאישור מנהל." });
+    res.json({ message: "נרשמת בהצלחה! חשבונך ממתין כעת לאישור מנהל." });
 });
 
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body; const db = readDB();
     const user = db.users.find(u => u.username === username && u.password === password);
     if (!user) return res.status(401).json({ error: "שם משתמש או סיסמה שגויים." });
-    if (!user.isEmailVerified && user.role !== 'admin') return res.status(403).json({ error: "עליך לאמת את כתובת האימייל שלך דרך הקישור ששלחנו אליך לפני שתוכל להתחבר." });
-    if (!user.isApproved && user.role !== 'admin') return res.status(403).json({ error: "האימייל אומת בהצלחה, אך חשבונך עדיין ממתין לאישור מנהל." });
+    if (!user.isApproved && user.role !== 'admin') return res.status(403).json({ error: "חשבונך עדיין ממתין לאישור מנהל." });
     
     user.lastSeen = Date.now(); user.lastActive = Date.now(); writeDB(db);
     res.json({ message: "התחברת!", username: user.username, role: user.role });
+});
+
+// מאגר קישורים (חדש!)
+app.get('/api/links', (req, res) => res.json(readDB().links || []));
+app.post('/api/links', (req, res) => {
+    const { username, title, url } = req.body; const db = readDB();
+    if(!db.links) db.links = [];
+    db.links.push({ id: Date.now(), title, url, author: username, date: getILTime() });
+    writeDB(db); res.json({success: true});
+});
+app.delete('/api/links/:id', (req, res) => {
+    const { username } = req.body; const db = readDB();
+    const user = db.users.find(u => u.username === username);
+    if(!user || (user.role !== 'admin' && user.role !== 'mod')) return res.status(403).json({error: "אין הרשאה"});
+    db.links = db.links.filter(l => l.id !== parseInt(req.params.id));
+    writeDB(db); res.json({success: true});
 });
 
 app.get('/api/users/info', (req, res) => { const db = readDB(); const info = {}; db.users.forEach(u => { info[u.username] = { role: u.role || 'user', joinDate: u.joinDate || '', totalLikes: u.totalLikes || 0, isVeteran: isVeteran(u), lastSeen: u.lastSeen }; }); res.json(info); });
@@ -209,8 +149,42 @@ app.post('/api/posts/:id/reply', upload.array('attachedFiles', 5), (req, res) =>
 app.delete('/api/posts/:id', (req, res) => { const db = readDB(); db.posts = db.posts.filter(p => p.id !== parseInt(req.params.id)); writeDB(db); res.json({ success: true }); });
 app.post('/api/posts/delete-reply', (req, res) => { const { username, postId, replyId } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); if (!user || user.role !== 'admin') return res.status(403).json({ error: "רק מנהל יכול למחוק." }); const post = db.posts.find(p => p.id === postId); if (post) { post.replies = post.replies.filter(r => r.id !== replyId); writeDB(db); } res.json({ success: true }); });
 app.post('/api/like', (req, res) => { const { username, postId, replyId } = req.body; const db = readDB(); const post = db.posts.find(p => p.id === postId); if (!post) return res.status(404).json({ error: "לא נמצא" }); let target = replyId ? post.replies.find(r => r.id === replyId) : post; if (target.author === username) return res.status(400).json({ error: "לייק עצמי חסום!" }); const targetUser = db.users.find(u => u.username === target.author); const likeIndex = target.likes.indexOf(username); if (likeIndex > -1) { target.likes.splice(likeIndex, 1); if (targetUser) { targetUser.totalLikes--; targetUser.veteranProgress--; } } else { target.likes.push(username); if (targetUser) { targetUser.totalLikes++; targetUser.veteranProgress++; targetUser.notifications.push({ text: `${username} עשה לייק להודעה שלך!`, threadId: post.id, isNew: true }); } } writeDB(db); res.json({ success: true }); });
+
+// עריכת תוכן השרשור או התגובה
 app.put('/api/posts/edit', (req, res) => { const { username, postId, replyId, newContent } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); const post = db.posts.find(p => p.id === postId); let target = replyId ? post.replies.find(r => r.id === replyId) : post; if (!target) return res.status(404).json({ error: "לא נמצא" }); if (!user || (user.role !== 'admin' && user.role !== 'mod' && user.role !== 'editor' && target.author !== username)) return res.status(403).json({ error: "אין הרשאה." }); target.content = newContent + `\n\n[נערך לאחרונה ב-${getILTime()}]`; writeDB(db); res.json({ success: true }); });
+
+// שינוי כותרת האשכול
 app.put('/api/posts/rename', (req, res) => { const { username, postId, newTitle } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); if (!user || (user.role !== 'admin' && user.role !== 'editor')) return res.status(403).json({ error: "אין הרשאה." }); const post = db.posts.find(p => p.id === postId); if (post) { db.auditLogs.push({ id: Date.now(), date: getILTime(), editor: username, action: 'שינוי כותרת', details: `מ: "${post.title}" ל: "${newTitle}"` }); post.title = newTitle; writeDB(db); res.json({ success: true }); } else res.status(404).json({ error: "לא נמצא." }); });
+
+// פיצול אשכול (חדש!)
+app.post('/api/posts/split', (req, res) => {
+    const { username, postId, replyId, newTitle } = req.body; const db = readDB();
+    const user = db.users.find(u => u.username === username);
+    if (!user || (user.role !== 'admin' && user.role !== 'mod')) return res.status(403).json({ error: "אין הרשאה." });
+    
+    const post = db.posts.find(p => p.id === postId);
+    if (!post) return res.status(404).json({error: "לא נמצא"});
+    
+    const rIndex = post.replies.findIndex(r => r.id === replyId);
+    if (rIndex === -1) return res.status(404).json({error: "תגובה לא נמצאה"});
+    
+    // חותך את כל התגובות החל מהתגובה שנבחרה
+    const repliesToMove = post.replies.splice(rIndex);
+    const firstMsg = repliesToMove.shift(); // התגובה הראשונה הופכת להיות גוף האשכול החדש
+    
+    const newPost = { 
+        id: Date.now(), lastUpdated: Date.now(), views: 0, 
+        author: firstMsg.author, title: newTitle, category: post.category, 
+        content: firstMsg.content, date: firstMsg.date, fileUrls: firstMsg.fileUrls || [], 
+        likes: firstMsg.likes || [], replies: repliesToMove, followers: [firstMsg.author], isLocked: false 
+    };
+    db.posts.push(newPost);
+    post.lastUpdated = Date.now();
+    
+    db.auditLogs.push({ id: Date.now(), date: getILTime(), editor: username, action: 'פיצול אשכול', details: `מתוך: "${post.title}" -> לאשכול חדש: "${newTitle}"` });
+    writeDB(db); res.json({ success: true, newPostId: newPost.id });
+});
+
 app.put('/api/posts/move', (req, res) => { const { username, postId, newCategory } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); if (!user || (user.role !== 'admin' && user.role !== 'editor')) return res.status(403).json({ error: "אין הרשאה." }); const post = db.posts.find(p => p.id === postId); if (post) { db.auditLogs.push({ id: Date.now(), date: getILTime(), editor: username, action: 'העברת קטגוריה', details: `האשכול "${post.title}" הועבר מ: ${post.category} ל: ${newCategory}` }); post.category = newCategory; writeDB(db); res.json({ success: true }); } else res.status(404).json({ error: "לא נמצא." }); });
 app.put('/api/posts/lock', (req, res) => { const { username, postId } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); if (!user || (user.role !== 'admin' && user.role !== 'mod')) return res.status(403).json({ error: "אין הרשאה." }); const post = db.posts.find(p => p.id === postId); if (post) { post.isLocked = !post.isLocked; writeDB(db); res.json({ success: true }); } else res.status(404).json({ error: "לא נמצא." }); });
 app.post('/api/report', (req, res) => { const { reporter, postId, replyId, reason } = req.body; const db = readDB(); if (!db.reports) db.reports = []; db.reports.push({ id: Date.now(), reporter, postId, replyId, reason, date: getILTime() }); writeDB(db); res.json({ success: true }); });
@@ -220,9 +194,9 @@ app.delete('/api/admin/categories', (req, res) => { const { username, catName } 
 app.get('/api/admin/reports', (req, res) => res.json(readDB().reports || []));
 app.delete('/api/admin/reports/:id', (req, res) => { const db = readDB(); db.reports = (db.reports || []).filter(r => r.id !== parseInt(req.params.id)); writeDB(db); res.json({ success: true }); });
 app.get('/api/admin/audit', (req, res) => res.json(readDB().auditLogs.reverse() || []));
-app.get('/api/admin/all-users', (req, res) => { res.json(readDB().users.map(u => ({ username: u.username, email: u.email, role: u.role, isApproved: u.isApproved, isEmailVerified: u.isEmailVerified, joinDate: u.joinDate, ip: u.ip, currentActivity: u.currentActivity, lastActive: u.lastActive }))); });
+app.get('/api/admin/all-users', (req, res) => { res.json(readDB().users.map(u => ({ username: u.username, role: u.role, isApproved: u.isApproved, joinDate: u.joinDate, ip: u.ip, currentActivity: u.currentActivity, lastActive: u.lastActive }))); });
 app.get('/api/admin/all-messages', (req, res) => res.json(readDB().messages.reverse()));
-app.get('/api/admin/pending-users', (req, res) => res.json(readDB().users.filter(u => !u.isApproved && u.isEmailVerified && u.role !== 'admin').map(u => u.username)));
+app.get('/api/admin/pending-users', (req, res) => res.json(readDB().users.filter(u => !u.isApproved && u.role !== 'admin').map(u => u.username)));
 app.post('/api/admin/approve', (req, res) => { const db = readDB(); const user = db.users.find(u => u.username === req.body.username); if (user) { user.isApproved = true; writeDB(db); res.json({ success: true }); } else res.status(404).json({ error: "לא נמצא." }); });
 app.post('/api/admin/delete-user', (req, res) => { const db = readDB(); const { username } = req.body; const user = db.users.find(u => u.username === username); if (user && user.role === 'admin') return res.status(400).json({error:"אי אפשר למחוק מנהל."}); db.users = db.users.filter(u => u.username !== username); writeDB(db); res.json({ success: true }); });
 app.put('/api/admin/users/:username/role', (req, res) => { const db = readDB(); const user = db.users.find(u => u.username === req.params.username); if (user && user.role !== 'admin') { user.role = req.body.role; writeDB(db); res.json({success: true}); } else res.status(400).json({error: "שגיאה"}); });
