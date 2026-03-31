@@ -51,7 +51,7 @@
         .rich-toolbar button:hover{background:#f3f4f6}
         .search-bar{display:flex;gap:10px;background:#f9fafb;padding:15px;border-radius:8px;margin-bottom:20px;border:1px solid var(--border); flex-wrap:wrap;}
         .rules-box {background:#e0e7ff; padding:15px; border-radius:8px; border:1px solid #c7d2fe; margin-top:15px; text-align:right;}
-        .split-cb { position: absolute; left: 15px; top: 15px; transform: scale(1.5); cursor: pointer; }
+        .split-cb { position: absolute; right: 15px; top: 15px; transform: scale(1.8); cursor: pointer; z-index: 50; }
     </style>
 </head>
 <body>
@@ -101,7 +101,7 @@
             </div>
 
             <div id="userProfileView" class="hidden">
-                <button onclick="closeProfileAndReturn()" style="background: #6B7280; margin-bottom: 20px;">➔ חזור</button>
+                <button onclick="backToThreads()" style="background: #6B7280; margin-bottom: 20px;">➔ חזור</button>
                 <div id="profileContentArea" style="background: #f9fafb; padding: 20px; border-radius: 10px; border: 1px solid var(--border);"></div>
             </div>
 
@@ -137,6 +137,9 @@
 
                 <div id="newThreadForm" class="hidden" style="background: #fdf2f8; border: 1px solid #fbcfe8; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
                     <input type="text" id="newThreadTitle" placeholder="כותרת האשכול">
+                    <div style="display:flex; gap:10px; margin-bottom:10px;">
+                        <select id="newThreadTag" style="flex:1;"><option value="">ללא תגית</option></select>
+                    </div>
                     <div class="rich-toolbar">
                         <button type="button" onclick="insertTag('newThreadContent', '[b]', '[/b]')"><b>B</b></button>
                         <button type="button" onclick="insertTag('newThreadContent', '[i]', '[/i]')"><i>I</i></button>
@@ -188,7 +191,7 @@
     </div>
 
     <script>
-        let currentUser = null, currentUserRole = null, postsData = [], usersInfo = {}, confirmActionCb = null;
+        let currentUser = null, currentUserRole = null, postsData = [], usersInfo = {}, tagsData = [], confirmActionCb = null;
         let readThreads = JSON.parse(localStorage.getItem('readThreads')) || {};
         window.currentConvos = {}; let currentChatPartner = null; let currentChatSubject = null;
         let lastUnreadCount = 0, lastUnreadMsgs = 0;
@@ -258,10 +261,12 @@
         });
 
         function hideAllViews() {
-            ['threadsView', 'singleThreadView', 'userProfileView', 'linkArchiveView', 'allFilesView'].forEach(id => document.getElementById(id).classList.add('hidden'));
-            document.getElementById('searchContainer').classList.remove('hidden');
+            const views = ['threadsView', 'singleThreadView', 'userProfileView', 'linkArchiveView', 'allFilesView'];
+            views.forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+            const searchContainer = document.getElementById('searchContainer'); if (searchContainer) searchContainer.classList.remove('hidden');
             isSplitMode = false;
-            document.getElementById('splitActionArea').classList.add('hidden');
+            const splitArea = document.getElementById('splitActionArea'); if (splitArea) splitArea.classList.add('hidden');
+            document.querySelectorAll('.split-cb').forEach(el => el.classList.add('hidden'));
         }
         
         window.onload = () => { const savedUser = localStorage.getItem('forumUser') || sessionStorage.getItem('forumUser'); if (savedUser) { currentUser = savedUser; enterForum(); } };
@@ -322,8 +327,29 @@
             let catHtml = '<option value="">🌐 כל הקטגוריות</option>';
             cats.forEach(c => { if(c==='אקטואליה' && !isVet) return; catHtml += `<option value="${c}">📁 ${c}</option>`; });
             document.getElementById('categorySelect').innerHTML = catHtml;
+            
+            const tRes = await fetch('/api/tags'); tagsData = await tRes.json();
+            let tagHtml = '<option value="">ללא תגית</option>';
+            tagsData.forEach(t => { tagHtml += `<option value="${t.name}">${t.name}</option>`; });
+            document.getElementById('newThreadTag').innerHTML = tagHtml;
+
             loadPosts(); updatePing(); setInterval(updatePing, 3000); 
         }
+
+        // --- תיקון אולטימטיבי לכפתור חזור ---
+        window.backToThreads = async function() { 
+            try {
+                history.pushState({}, '', window.location.pathname); 
+                document.getElementById('singleThreadView').setAttribute('data-current-id', ''); 
+                hideAllViews(); 
+                document.getElementById('searchContainer').classList.remove('hidden');
+                document.getElementById('threadsView').classList.remove('hidden');
+                await loadPosts(); 
+            } catch (err) {
+                console.error(err);
+                window.location.href = '/'; // פתרון גיבוי אם משהו משתבש במערכת
+            }
+        };
 
         window.markAllAsRead = function() {
             if(postsData.length === 0) return;
@@ -338,11 +364,12 @@
         async function updatePing(typingTarget = null) {
             if (!currentUser) return;
             let activity = 'גולש בפורום הראשי';
-            if (!document.getElementById('singleThreadView').classList.contains('hidden')) {
-                const tId = parseInt(document.getElementById('singleThreadView').getAttribute('data-current-id'));
+            const singleThreadEl = document.getElementById('singleThreadView');
+            if (singleThreadEl && !singleThreadEl.classList.contains('hidden')) {
+                const tId = parseInt(singleThreadEl.getAttribute('data-current-id'));
                 const p = postsData.find(x => x.id === tId); if (p) activity = 'צופה באשכול: ' + p.title;
-            } else if (!document.getElementById('userProfileView').classList.contains('hidden')) { activity = 'צופה בפרופיל משתמש'; }
-              else if (!document.getElementById('linkArchiveView').classList.contains('hidden')) { activity = 'מעיין במאגר הקישורים'; }
+            } else if (document.getElementById('userProfileView') && !document.getElementById('userProfileView').classList.contains('hidden')) { activity = 'צופה בפרופיל משתמש'; }
+              else if (document.getElementById('linkArchiveView') && !document.getElementById('linkArchiveView').classList.contains('hidden')) { activity = 'מעיין במאגר הקישורים'; }
 
             const res = await fetch('/api/ping', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, typingTo: typingTarget, currentActivity: activity}) });
             const data = await res.json(); document.getElementById('onlineCount').innerText = data.onlineUsers.length;
@@ -399,7 +426,6 @@
         };
         window.closeProfileAndReturn = function() { document.getElementById('userProfileView').classList.add('hidden'); renderThreads(); };
 
-        // === כל הקבצים בפורום ===
         window.openAllFiles = async function() {
             hideAllViews(); document.getElementById('searchContainer').classList.add('hidden');
             document.getElementById('allFilesView').classList.remove('hidden');
@@ -424,7 +450,6 @@
             }).join('') : '<p style="grid-column: 1 / -1; text-align:center;">אין קבצים עדיין.</p>';
         };
 
-        // === פונקציות מאגר הקישורים ===
         window.openLinkArchive = function() {
             hideAllViews(); document.getElementById('searchContainer').classList.add('hidden');
             document.getElementById('linkArchiveView').classList.remove('hidden');
@@ -493,7 +518,6 @@
             document.getElementById('threadContentArea').innerHTML = html;
         };
 
-        // === שיחות פרטיות (חלון גדול, ציטוט נקי, גלילה מסודרת) ===
         async function openInbox() {
             const res = await fetch(`/api/messages/${currentUser}`); const msgs = await res.json(); document.getElementById('msgBadge').classList.add('hidden'); 
             window.currentConvos = {}; 
@@ -537,7 +561,7 @@
                     </div>
                 </div>
             `;
-            refreshChatBox(partner, subject, true); // true = כפה גלילה למטה
+            refreshChatBox(partner, subject, true); 
         }
         
         window.refreshChatBox = function(partner, subject, forceScroll = false) {
@@ -572,10 +596,8 @@
                          </div>`;
             });
 
-            // מונע רינדור מחדש אם ה-HTML זהה (מונע קפיצות מעצבנות)
             if (scroll.innerHTML === html) return;
 
-            // בדיקה אם המשתמש כבר גלל למטה
             const isNearBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 100;
             
             scroll.innerHTML = html; 
@@ -595,7 +617,6 @@
             if (!targetMsg) return;
             
             let clean = targetMsg.content;
-            // קילוף כל הציטוטים הפנימיים מההודעה כדי לצטט רק את ההודעה עצמה
             while(clean.match(/\[quote="(.*?)"\]([\s\S]*?)\[\/quote\]/gi)) {
                 clean = clean.replace(/\[quote="(.*?)"\]([\s\S]*?)\[\/quote\]/gi, '');
             }
@@ -699,9 +720,16 @@
             const isUnread = p.lastUpdated > (readThreads[p.id] || 0);
             const lastMsg = p.replies.length > 0 ? p.replies[p.replies.length - 1] : p;
             
+            let tagHtml = '';
+            if(p.tag) {
+                const tObj = tagsData.find(t => t.name === p.tag);
+                const tColor = tObj ? tObj.color : '#888';
+                tagHtml = `<span class="cat-tag" style="background:${tColor}; margin-right:5px; font-size:14px;">🏷️ ${p.tag}</span>`;
+            }
+            
             return `
             <div class="thread-card ${p.isLocked ? 'thread-locked' : ''}" onclick="openThread(${p.id})">
-                <div class="thread-title">${p.isLocked ? '🔒 ' : ''}<span class="cat-tag" style="background:${getCatColor(p.category)};">${p.category}</span>${p.title} ${isUnread ? '<span class="unread-badge">חדש</span>' : ''}</div>
+                <div class="thread-title">${p.isLocked ? '🔒 ' : ''}<span class="cat-tag" style="background:${getCatColor(p.category)};">${p.category}</span>${tagHtml}${p.title} ${isUnread ? '<span class="unread-badge">חדש</span>' : ''}</div>
                 <div style="font-size: 13px; color: #6B7280; display: flex; justify-content: space-between; margin-top:5px; border-top: 1px solid #eee; padding-top: 5px;">
                     <div>
                         <span>מאת: <strong class="clickable-user" onclick="showUserProfile('${p.author}'); event.stopPropagation();">${p.author}</strong></span><br>
@@ -736,9 +764,10 @@
         async function createThread() {
             if(isSubmitting) return;
             const title = document.getElementById('newThreadTitle').value, content = document.getElementById('newThreadContent').value, cat = document.getElementById('categorySelect').value, fileInput = document.getElementById('newThreadFile');
+            const tag = document.getElementById('newThreadTag').value;
             if (!title || !content || !cat) return showMsg('שגיאה', 'חובה למלא הכל.');
             isSubmitting = true; document.getElementById('postThreadBtn').disabled = true;
-            const fd = new FormData(); fd.append('author', currentUser); fd.append('title', title); fd.append('content', content); fd.append('category', cat);
+            const fd = new FormData(); fd.append('author', currentUser); fd.append('title', title); fd.append('content', content); fd.append('category', cat); fd.append('tag', tag);
             if (fileInput.files) { for(let i=0; i<fileInput.files.length; i++) fd.append('attachedFiles', fileInput.files[i]); }
             await fetch('/api/posts', { method: 'POST', body: fd }); toggleNewThreadForm(); document.getElementById('newThreadTitle').value = ''; document.getElementById('newThreadContent').value = ''; fileInput.value = ''; history.pushState({}, '', '/'); loadPosts();
             isSubmitting = false; document.getElementById('postThreadBtn').disabled = false;
@@ -799,12 +828,19 @@
             
             const splitCheckbox = (!isMain && canMod) ? `<input type="checkbox" class="split-cb ${isSplitMode ? '' : 'hidden'}" value="${p.id}">` : '';
 
+            let tagHtml = '';
+            if(isMain && p.tag) {
+                const tObj = tagsData.find(t => t.name === p.tag);
+                const tColor = tObj ? tObj.color : '#888';
+                tagHtml = `<span class="cat-tag" style="background:${tColor}; margin-right:5px; font-size:14px;">🏷️ ${p.tag}</span>`;
+            }
+
             return `
             <div class="post-container" id="post-${replyId || p.id}" style="position:relative;">
                 ${splitCheckbox}
                 <div class="user-panel"><strong class="clickable-user" style="font-size: 17px;" onclick="showUserProfile('${p.author}')">${p.author}</strong><br>${getUserBadge(p.author)}</div>
                 <div class="content-panel">
-                    ${isMain ? `<h2 style="margin: 0 0 10px 0; color: var(--text);">${p.isLocked ? '🔒 ' : ''}${p.title}</h2>` : ''}
+                    ${isMain ? `<h2 style="margin: 0 0 10px 0; color: var(--text);">${p.isLocked ? '🔒 ' : ''}${tagHtml}${p.title}</h2>` : ''}
                     <div style="font-size: 12px; color: #9CA3AF; margin-bottom: 10px;">פורסם: ${p.date} ${isMain ? ` | 👁️ צפיות: ${p.views}` : ''}</div>
                     <div style="font-size: 15px; white-space: pre-wrap; line-height: 1.6;">${parseBBCode(p.content)}</div>
                     ${filesHtml}
