@@ -180,6 +180,7 @@
             <button onclick="showMembersList()" style="width:100%; background:#3b82f6; margin-bottom:10px;">👥 חברי הקהילה (<span id="totalUsersCounter">0</span>)</button>
             <button onclick="openLinkArchive()" style="width:100%; background:#0ea5e9; margin-bottom:10px;">🗃️ מאגר קישורים</button>
             <button onclick="openAllFiles()" style="width:100%; background:#8b5cf6; margin-bottom:15px;">📁 כל הקבצים בפורום</button>
+            <button onclick="showRules()" style="width:100%; background:#10b981; margin-bottom:15px;">📜 חוקי הפורום</button>
             <p style="font-weight: bold; margin-bottom: 5px;">🟢 מחוברים כעת (<span id="onlineCount">0</span>):</p>
             <ul id="onlineUsersList" style="list-style: none; padding: 0; margin: 0; font-size: 14px;"></ul>
             <button onclick="triggerContactUs()" style="width:100%; background:#d946ef; margin-top:20px;">📞 צור קשר עם ההנהלה</button>
@@ -363,7 +364,7 @@
                 const newMsgs = msgs.filter(m => (m.from === currentChatPartner || m.to === currentChatPartner) && m.subject === currentChatSubject);
                 const convKey = currentChatPartner + '|||' + currentChatSubject;
                 if (JSON.stringify(newMsgs) !== JSON.stringify(window.currentConvos[convKey])) {
-                    window.currentConvos[convKey] = newMsgs; refreshChatBox(currentChatPartner, currentChatSubject);
+                    window.currentConvos[convKey] = newMsgs; refreshChatBox(currentChatPartner, currentChatSubject, false);
                 }
             }
         }
@@ -389,7 +390,6 @@
             if (found === 0) userPostsHtml += "<p>טרם כתב הודעות.</p>";
             let roleStr = info.role === 'admin' ? "👑 מנהל ראשי" : (info.role === 'editor' ? "📝 עורך תוכן" : (info.role === 'mod' ? "🛡️ צוות פיקוח" : (info.totalLikes >= 50 ? "🏆 משתמש מוביל" : (info.isVeteran ? "🌟 משתמש ותיק" : "👤 משתמש רגיל"))));
             
-            // הוספת כפתור "שיחת מנהל"
             let adminChatBtn = '';
             if(currentUserRole === 'admin' && currentUser !== username) {
                 adminChatBtn = `<button class="btn-action" style="margin-top:10px; background:#10B981; color:white;" onclick="openNewChat('${username}', 'שיחת מנהל')">✉️ התחל שיחת מנהל איתו</button>`;
@@ -493,7 +493,7 @@
             document.getElementById('threadContentArea').innerHTML = html;
         };
 
-        // === שיחות פרטיות (חלון גדול, ציטוט, מחיקה) ===
+        // === שיחות פרטיות (חלון גדול, ציטוט נקי, גלילה מסודרת) ===
         async function openInbox() {
             const res = await fetch(`/api/messages/${currentUser}`); const msgs = await res.json(); document.getElementById('msgBadge').classList.add('hidden'); 
             window.currentConvos = {}; 
@@ -537,11 +537,13 @@
                     </div>
                 </div>
             `;
-            refreshChatBox(partner, subject);
+            refreshChatBox(partner, subject, true); // true = כפה גלילה למטה
         }
         
-        window.refreshChatBox = function(partner, subject) {
-            if(!document.getElementById('chatScroll')) return;
+        window.refreshChatBox = function(partner, subject, forceScroll = false) {
+            const scroll = document.getElementById('chatScroll');
+            if(!scroll) return;
+            
             const savedDraft = document.getElementById('pmReplyContent') ? document.getElementById('pmReplyContent').value : ''; 
             let html = '';
             const key = partner + '|||' + subject;
@@ -552,8 +554,7 @@
                 const likesHtml = m.likes.length > 0 ? `<div class="pm-thanks">❤️ ${m.likes.length}</div>` : '';
                 const likeBtn = !isMe ? `<button style="background:none; border:none; color:#be185d; cursor:pointer; font-size:12px; margin-top:5px;" onclick="likePM(${m.id})">👍 תודה</button>` : '';
                 
-                // הוספת צטט (לשניהם) ומחיקה (רק לשולח)
-                const quoteBtn = `<button style="background:none; border:none; color:#0284c7; cursor:pointer; font-size:12px; margin-top:5px; margin-right:5px;" onclick="quotePM('${m.from}', \`${m.content.replace(/`/g,"'")}\`)">💬 צטט</button>`;
+                const quoteBtn = `<button style="background:none; border:none; color:#0284c7; cursor:pointer; font-size:12px; margin-top:5px; margin-right:5px;" onclick="quotePM(${m.id})">💬 צטט</button>`;
                 const deleteBtn = isMe ? `<button style="background:none; border:none; color:red; cursor:pointer; font-size:12px; margin-top:5px; margin-right:5px;" onclick="deletePM(${m.id})">🗑️ מחק</button>` : '';
 
                 let fHtml = ''; if(m.fileUrls) m.fileUrls.forEach(u => {
@@ -570,21 +571,45 @@
                             ${likesHtml}
                          </div>`;
             });
-            document.getElementById('chatScroll').innerHTML = html; 
+
+            // מונע רינדור מחדש אם ה-HTML זהה (מונע קפיצות מעצבנות)
+            if (scroll.innerHTML === html) return;
+
+            // בדיקה אם המשתמש כבר גלל למטה
+            const isNearBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 100;
+            
+            scroll.innerHTML = html; 
             if(document.getElementById('pmReplyContent')) document.getElementById('pmReplyContent').value = savedDraft; 
-            const scroll = document.getElementById('chatScroll'); scroll.scrollTop = scroll.scrollHeight;
+            
+            if (forceScroll || isNearBottom) {
+                scroll.scrollTop = scroll.scrollHeight;
+            }
         }
 
-        window.quotePM = function(author, text) {
-            const contentClean = text.replace(/\[quote.*?\][\s\S]*?\[\/quote\]/g, '').trim();
-            document.getElementById('pmReplyContent').value += `[quote="${author}"]\n${contentClean}\n[/quote]\n\n`;
-            document.getElementById('pmReplyContent').focus();
+        window.quotePM = function(msgId) {
+            let targetMsg = null;
+            for (let key in window.currentConvos) {
+                const found = window.currentConvos[key].find(m => m.id === msgId);
+                if (found) targetMsg = found;
+            }
+            if (!targetMsg) return;
+            
+            let clean = targetMsg.content;
+            // קילוף כל הציטוטים הפנימיים מההודעה כדי לצטט רק את ההודעה עצמה
+            while(clean.match(/\[quote="(.*?)"\]([\s\S]*?)\[\/quote\]/gi)) {
+                clean = clean.replace(/\[quote="(.*?)"\]([\s\S]*?)\[\/quote\]/gi, '');
+            }
+            clean = clean.trim();
+
+            const textarea = document.getElementById('pmReplyContent');
+            textarea.value += `[quote="${targetMsg.from}"]\n${clean}\n[/quote]\n\n`;
+            textarea.focus();
         }
 
         window.deletePM = async function(id) {
             if(confirm("למחוק הודעה פרטית זו?")) {
                 await fetch(`/api/messages/${id}`, { method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify({username: currentUser}) });
-                updatePing(); // מרענן את השיחות מהשרת אוטומטית
+                updatePing(); 
             }
         }
 
@@ -624,7 +649,6 @@
             isSubmitting = false; document.getElementById('pmSendBtn').disabled = false;
         }
 
-        // --- התראות מובילות מדויק להודעה ---
         window.gotoThread = async function(threadId, replyId = null) { 
             closeModal(); await loadPosts(); await openThread(threadId, true); 
             if(replyId) {
@@ -654,6 +678,22 @@
             else if (!document.getElementById('userProfileView').classList.contains('hidden') || !document.getElementById('linkArchiveView').classList.contains('hidden') || !document.getElementById('allFilesView').classList.contains('hidden') || !document.getElementById('sysModal').classList.contains('hidden')) {} 
             else { const currentOpenId = parseInt(document.getElementById('singleThreadView').getAttribute('data-current-id')); if(currentOpenId) openThread(currentOpenId, true); else renderThreads(); }
         }
+
+        // עריכה של ציטוט בפורום עצמו - מקלף ציטוטים פנימיים
+        window.handleQuote = function(postId, replyId) {
+            const p = postsData.find(x => x.id === postId);
+            const target = replyId ? p.replies.find(r => r.id === replyId) : p;
+            if(!target) return;
+            
+            let clean = target.content;
+            while(clean.match(/\[quote="(.*?)"\]([\s\S]*?)\[\/quote\]/gi)) {
+                clean = clean.replace(/\[quote="(.*?)"\]([\s\S]*?)\[\/quote\]/gi, '');
+            }
+            clean = clean.replace(/\[נערך לאחרונה.*?\]/g, '').trim();
+            
+            document.getElementById('replyContent').value += `[quote="${target.author}"]\n${clean}\n[/quote]\n\n`; 
+            document.getElementById('replyContent').focus(); 
+        };
 
         function generateThreadCard(p) {
             const isUnread = p.lastUpdated > (readThreads[p.id] || 0);
@@ -710,7 +750,6 @@
             return `${roleHtml}<br><span style="font-size:10px; color:#9CA3AF; display:block; margin-top:3px;">נראה לאחרונה: ${timeAgo(info.lastSeen)}</span><span style="font-size:11px; color:#6B7280; display:block; margin-top:2px;">הצטרף: ${info.joinDate}</span><span style="font-size:11px; color:#EC4899; font-weight:bold; display:block;">❤️ לייקים: ${info.totalLikes}</span>`;
         }
 
-        // === מצב פיצול אשכול מתקדם ===
         window.toggleSplitMode = function() {
             isSplitMode = !isSplitMode;
             if(isSplitMode) {
@@ -758,7 +797,6 @@
             
             const likesList = p.likes.length > 0 ? 'לייקים מ: \n' + p.likes.join('\n') : 'תהיה הראשון לעשות לייק!';
             
-            // תיבת סימון מוסתרת לפיצול
             const splitCheckbox = (!isMain && canMod) ? `<input type="checkbox" class="split-cb ${isSplitMode ? '' : 'hidden'}" value="${p.id}">` : '';
 
             return `
@@ -789,7 +827,6 @@
             hideAllViews(); document.getElementById('searchContainer').classList.add('hidden');
             document.getElementById('singleThreadView').classList.remove('hidden'); document.getElementById('singleThreadView').setAttribute('data-current-id', id);
             
-            // הצגת כפתור "מצב פיצול" רק למנהלים עריכה
             if (currentUserRole === 'admin' || currentUserRole === 'mod') { document.getElementById('splitModeBtn').classList.remove('hidden'); }
             
             const isFollowing = p.followers.includes(currentUser);
@@ -817,9 +854,6 @@
                 </div>`;
             document.getElementById('threadContentArea').innerHTML = html;
         }
-
-        function backToThreads() { history.pushState({}, '', '/'); document.getElementById('singleThreadView').setAttribute('data-current-id', ''); hideAllViews(); renderThreads(); }
-        async function toggleFollow(postId) { await fetch(`/api/posts/${postId}/follow`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser}) }); loadPosts(); }
 
         async function addReply(postId) {
             if(isSubmitting) return;
