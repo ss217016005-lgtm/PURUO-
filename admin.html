@@ -36,13 +36,13 @@
         </div>
 
         <div class="tabs">
-            <button class="active" onclick="switchTab('tab-users')">👥 משתמשים ופעילות</button>
-            <button onclick="switchTab('tab-settings')">⚙️ הגדרות מערכת</button>
-            <button onclick="switchTab('tab-reports')">🚨 דיווחים ופניות</button>
-            <button onclick="switchTab('tab-cats')">🗂️ ניהול קטגוריות</button>
+            <button class="active" onclick="switchTab('tab-users')">👥 משתמשים</button>
+            <button onclick="switchTab('tab-settings')">⚙️ הגדרות</button>
+            <button onclick="switchTab('tab-reports')">🚨 דיווחים</button>
+            <button onclick="switchTab('tab-cats')">🗂️ קטגוריות ותגיות</button>
             <button onclick="switchTab('tab-posts')">🗑️ ניהול אשכולות</button>
             <button onclick="switchTab('tab-pms')">✉️ חיפוש בפרטיות</button>
-            <button onclick="switchTab('tab-audit')">📖 יומן עורכי תוכן</button>
+            <button onclick="switchTab('tab-audit')">📖 יומן עורכים</button>
         </div>
 
         <div id="tab-users" class="section active" style="border-right: 5px solid #8e44ad;">
@@ -58,7 +58,6 @@
 
         <div id="tab-settings" class="section" style="border-right: 5px solid #16a085;">
             <h2 style="color: #16a085; margin-top: 0;">⚙️ הגדרות וכללים</h2>
-            
             <div class="form-group">
                 <label>הודעת הנהלה צפה (באנר עליון בפורום):</label>
                 <div style="display: flex; gap: 10px; align-items: center;">
@@ -67,12 +66,10 @@
                     <input type="color" id="settingFloatingColor" value="#f59e0b" style="padding: 0; width: 40px; height: 35px; border: none; cursor: pointer;">
                 </div>
             </div>
-
             <div class="form-group">
                 <label>כללי הפורום (מוצגים בהרשמה למשתמשים):</label>
                 <textarea id="settingRules" rows="8" placeholder="כתוב כאן את חוקי הפורום..."></textarea>
             </div>
-
             <button class="btn-approve" style="font-size:16px; padding:10px 20px;" onclick="saveSettings()">💾 שמור הגדרות</button>
         </div>
 
@@ -93,6 +90,18 @@
             <table>
                 <thead><tr><th>סדר תצוגה</th><th>שם הקטגוריה</th><th>פעולות</th></tr></thead>
                 <tbody id="catsTable"></tbody>
+            </table>
+            
+            <hr style="margin: 30px 0;">
+            <h2 style="color: #f39c12;">🏷️ ניהול תגיות (לפתיחת אשכולות)</h2>
+            <div style="margin-bottom:15px; display:flex; gap:10px; align-items:center;">
+                <input type="text" id="newTagInput" placeholder="שם התגית (לדוגמה: שיתוף)" style="padding:8px; width: 200px;">
+                <input type="color" id="newTagColor" value="#3b82f6" style="padding: 0; width: 40px; height: 35px; border: none; cursor: pointer;">
+                <button class="btn-approve" onclick="addTag()">➕ הוסף תגית</button>
+            </div>
+            <table>
+                <thead><tr><th>צבע</th><th>שם התגית</th><th>פעולות</th></tr></thead>
+                <tbody id="tagsTable"></tbody>
             </table>
         </div>
 
@@ -141,7 +150,6 @@
         }
 
         async function loadData() {
-            // הגדרות מערכת
             const sRes = await fetch('/api/settings'); const settings = await sRes.json();
             if (settings) {
                 document.getElementById('settingRules').value = settings.rules || "";
@@ -149,7 +157,6 @@
                 document.getElementById('settingFloatingColor').value = settings.floatingMessage ? settings.floatingMessage.color : "#f59e0b";
             }
 
-            // משתמשים
             const uRes = await fetch('/api/admin/all-users'); const users = await uRes.json();
             const pRes = await fetch('/api/admin/pending-users'); const pending = await pRes.json();
             
@@ -179,11 +186,12 @@
                 return `<tr><td><strong>${u.username.replace(/</g, "&lt;")}</strong></td><td>${roleStr}</td><td style="font-family:monospace;">${u.ip || 'לא ידוע'}</td><td>${activity}</td><td>${u.role !== 'admin' ? `${promoteBtns} <button class="btn-delete" onclick="deleteUser('${u.username.replace(/'/g, "\\'")}')">מחק</button>` : '<span style="color:gray;">מנהל</span>'}</td></tr>`;
             }).join('');
 
-            // קטגוריות עם סידור
             const cRes = await fetch('/api/categories'); currentCategories = await cRes.json();
             renderCategories();
+            
+            const tRes = await fetch('/api/tags'); const tags = await tRes.json();
+            document.getElementById('tagsTable').innerHTML = tags.map(t => `<tr><td><div style="background:${t.color}; width:20px; height:20px; border-radius:50%; margin:auto;"></div></td><td><strong>${t.name}</strong></td><td><button class="btn-delete" onclick="deleteTag('${t.name.replace(/'/g,"\\'")}')">מחק</button></td></tr>`).join('');
 
-            // שאר הטבלאות
             const rRes = await fetch('/api/admin/reports'); const reports = await rRes.json();
             document.getElementById('reportsTable').innerHTML = reports.length === 0 ? "<tr><td colspan='5' style='text-align:center;'>הכל שקט. אין דיווחים.</td></tr>" :
                 reports.map(r => `<tr><td>${r.date}</td><td><strong>${r.reporter}</strong></td><td style="color: red; font-weight: bold;">${r.reason}</td><td>${r.postId ? `<a class="link-btn" href="/?thread=${r.postId}" target="_blank">🔗 הודעה</a>` : 'פנייה כללית'}</td><td><button class="btn-approve" onclick="resolveReport(${r.id})">סמן כטופל</button></td></tr>`).join('');
@@ -200,7 +208,6 @@
             renderPMs(allPmsCache);
         }
 
-        // פונקציות סדר קטגוריות
         function renderCategories() {
             document.getElementById('catsTable').innerHTML = currentCategories.map((c, i) => `
                 <tr>
@@ -225,6 +232,19 @@
             currentCategories[newIndex] = temp;
             await fetch('/api/admin/categories/reorder', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: adminUser, categories: currentCategories}) });
             renderCategories();
+        }
+        
+        async function addTag() {
+            const name = document.getElementById('newTagInput').value; const color = document.getElementById('newTagColor').value;
+            if(!name) return;
+            await fetch('/api/admin/tags', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, name, color}) });
+            document.getElementById('newTagInput').value = ''; loadData();
+        }
+        async function deleteTag(tagName) {
+            if(confirm(`למחוק את התגית "${tagName}"?`)) {
+                await fetch('/api/admin/tags', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, tagName}) });
+                loadData();
+            }
         }
 
         async function saveSettings() {
