@@ -66,14 +66,14 @@ app.set('trust proxy', true);
 
 function isVeteran(user) { return (user.role === 'admin' || user.role === 'mod' || user.role === 'editor' || user.veteranProgress >= 10); }
 
-function notifyMentionsAndQuotes(content, author, postTitle, threadId, db) {
+function notifyMentionsAndQuotes(content, author, postTitle, threadId, replyId, db) {
     db.users.forEach(u => {
-        if (u.username !== author && content.includes('@' + u.username)) { u.notifications.push({ text: `תויגת על ידי ${author} באשכול: "${postTitle}"`, threadId, isNew: true }); }
+        if (u.username !== author && content.includes('@' + u.username)) { u.notifications.push({ text: `תויגת על ידי ${author} באשכול: "${postTitle}"`, threadId, replyId, isNew: true }); }
     });
     const quotes = [...new Set((content.match(/\[quote="(.*?)"\]/gi) || []).map(m => m.match(/\[quote="(.*?)"\]/i)[1]))];
     quotes.forEach(username => {
         const u = db.users.find(x => x.username === username);
-        if (u && u.username !== author) u.notifications.push({ text: `${author} ציטט אותך באשכול: "${postTitle}"`, threadId, isNew: true });
+        if (u && u.username !== author) u.notifications.push({ text: `${author} ציטט אותך באשכול: "${postTitle}"`, threadId, replyId, isNew: true });
     });
 }
 
@@ -90,7 +90,7 @@ app.put('/api/admin/settings', (req, res) => {
     writeDB(db); res.json({ success: true });
 });
 
-// הרשמה פשוטה
+// הרשמה והתחברות
 app.post('/api/register', (req, res) => {
     const { username, password } = req.body; const db = readDB();
     if (db.users.find(u => u.username === username)) return res.status(400).json({ error: "שם המשתמש כבר קיים." });
@@ -116,7 +116,7 @@ app.post('/api/login', (req, res) => {
     res.json({ message: "התחברת!", username: user.username, role: user.role });
 });
 
-// מאגר קישורים (חדש!)
+// מאגר קישורים וקבצים
 app.get('/api/links', (req, res) => res.json(readDB().links || []));
 app.post('/api/links', (req, res) => {
     const { username, title, url } = req.body; const db = readDB();
@@ -132,45 +132,84 @@ app.delete('/api/links/:id', (req, res) => {
     writeDB(db); res.json({success: true});
 });
 
+app.get('/api/all-files', (req, res) => {
+    const db = readDB(); const files = [];
+    db.posts.forEach(p => {
+        if (p.fileUrls && p.fileUrls.length > 0) files.push({ urls: p.fileUrls, author: p.author, threadId: p.id, threadTitle: p.title, date: p.date });
+        p.replies.forEach(r => {
+            if (r.fileUrls && r.fileUrls.length > 0) files.push({ urls: r.fileUrls, author: r.author, threadId: p.id, replyId: r.id, threadTitle: p.title, date: r.date });
+        });
+    });
+    res.json(files.reverse());
+});
+
 app.get('/api/users/info', (req, res) => { const db = readDB(); const info = {}; db.users.forEach(u => { info[u.username] = { role: u.role || 'user', joinDate: u.joinDate || '', totalLikes: u.totalLikes || 0, isVeteran: isVeteran(u), lastSeen: u.lastSeen }; }); res.json(info); });
 app.post('/api/ping', (req, res) => { const { username, typingTo, currentActivity } = req.body; const db = readDB(); let unreadCount = 0, unreadMessages = 0, allNotifs = []; if (username) { const user = db.users.find(u => u.username === username); if (user) { user.ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress; user.currentActivity = currentActivity || 'גולש בפורום הראשי'; const now = Date.now(); if (now - user.lastActive > 432000000) user.veteranProgress = 0; user.lastSeen = now; user.lastActive = now; if (typingTo !== undefined) { user.typingTo = typingTo; user.typingExpires = now + 4000; } unreadCount = user.notifications ? user.notifications.filter(n => n.isNew !== false).length : 0; allNotifs = user.notifications || []; unreadMessages = db.messages.filter(m => m.to === username && !m.read).length; } writeDB(db); } const threeMinsAgo = Date.now() - 180000; const onlineUsers = db.users.filter(u => u.lastSeen > threeMinsAgo).map(u => u.username); const typingUsers = db.users.filter(u => u.typingTo === username && u.typingExpires > Date.now()).map(u => u.username); res.json({ onlineUsers, unreadCount, unreadMessages, typingUsers, allNotifs }); });
 app.post('/api/notifications/mark-read', (req, res) => { const { username } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); if (user && user.notifications) { user.notifications.forEach(n => n.isNew = false); writeDB(db); } res.json({ success: true }); });
 app.post('/api/notifications/clear', (req, res) => { const { username } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); if (user) { user.notifications = []; writeDB(db); } res.json({ success: true }); });
+
+// שיחות פרטיות
 app.get('/api/messages/:username', (req, res) => { const db = readDB(); const msgs = db.messages.filter(m => m.to === req.params.username || m.from === req.params.username); res.json(msgs); });
 app.post('/api/messages/read', (req, res) => { const { username, partner, subject } = req.body; const db = readDB(); db.messages.forEach(m => { if (m.to === username && m.from === partner && m.subject === subject) m.read = true; }); writeDB(db); res.json({ success: true }); });
-app.post('/api/messages', upload.array('attachedFiles', 5), (req, res) => { const { from, to, content, subject } = req.body; const db = readDB(); const sender = db.users.find(u => u.username === from), receiver = db.users.find(u => u.username === to); if (!receiver) return res.status(404).json({ error: "משתמש לא קיים." }); const hasHistory = db.messages.some(m => (m.from === from && m.to === to) || (m.from === to && m.to === from)); if (!isVeteran(sender) && !hasHistory) return res.status(403).json({ error: "רק משתמש ותיק יכול ליזום שיחה." }); const fileUrls = req.files ? req.files.map(f => `/uploads/${f.filename}`) : []; db.messages.push({ id: Date.now(), subject: subject || 'שיחה כללית', from, to, content, fileUrls, date: getILTime(), read: false, likes: [] }); writeDB(db); res.json({ success: true }); });
+app.delete('/api/messages/:id', (req, res) => {
+    const { username } = req.body; const db = readDB();
+    const idx = db.messages.findIndex(m => m.id === parseInt(req.params.id) && m.from === username);
+    if (idx > -1) { db.messages.splice(idx, 1); writeDB(db); res.json({success: true}); }
+    else res.status(403).json({error: "לא מורשה למחוק הודעה זו."});
+});
+app.post('/api/messages', upload.array('attachedFiles', 5), (req, res) => { 
+    const { from, to, content, subject } = req.body; const db = readDB(); 
+    const sender = db.users.find(u => u.username === from), receiver = db.users.find(u => u.username === to); 
+    if (!receiver) return res.status(404).json({ error: "משתמש לא קיים." }); 
+    
+    // בודק אם יש היסטוריה או אם זו שיחת מנהל ע"י מנהל
+    const hasHistory = db.messages.some(m => (m.from === from && m.to === to) || (m.from === to && m.to === from)); 
+    if (!isVeteran(sender) && !hasHistory) return res.status(403).json({ error: "רק משתמש ותיק יכול ליזום שיחה." }); 
+    
+    const fileUrls = req.files ? req.files.map(f => `/uploads/${f.filename}`) : []; 
+    db.messages.push({ id: Date.now(), subject: subject || 'שיחה כללית', from, to, content, fileUrls, date: getILTime(), read: false, likes: [] }); 
+    writeDB(db); res.json({ success: true }); 
+});
 app.post('/api/messages/:id/like', (req, res) => { const { username } = req.body; const id = parseInt(req.params.id); const db = readDB(); const msg = db.messages.find(m => m.id === id); if (msg && msg.from !== username) { const idx = msg.likes.indexOf(username); if (idx > -1) msg.likes.splice(idx, 1); else msg.likes.push(username); writeDB(db); res.json({ success: true }); } else res.status(400).json({ error: "שגיאה." }); });
+
+// פורום - קטגוריות, פוסטים
 app.get('/api/categories', (req, res) => res.json(readDB().categories));
+app.put('/api/admin/categories/reorder', (req, res) => {
+    const { username, categories } = req.body; const db = readDB();
+    const user = db.users.find(u => u.username === username);
+    if (!user || user.role !== 'admin') return res.status(403).json({ error: "אין הרשאה" });
+    db.categories = categories; writeDB(db); res.json({ success: true });
+});
+
 app.get('/api/posts', (req, res) => { res.json(readDB().posts.sort((a, b) => b.lastUpdated - a.lastUpdated)); });
 app.post('/api/posts/:id/view', (req, res) => { const db = readDB(); const post = db.posts.find(p => p.id === parseInt(req.params.id)); if (post) { post.views = (post.views || 0) + 1; writeDB(db); res.json({ views: post.views }); } else res.status(404).json({ error: "לא נמצא" }); });
-app.post('/api/posts', upload.array('attachedFiles', 5), (req, res) => { const { author, title, content, category } = req.body; const db = readDB(); const user = db.users.find(u => u.username === author); if (category === "אקטואליה" && !isVeteran(user)) return res.status(403).json({ error: "אקטואליה סגורה." }); const fileUrls = req.files ? req.files.map(f => `/uploads/${f.filename}`) : []; const newPost = { id: Date.now(), lastUpdated: Date.now(), views: 0, author, title, category, content, date: getILTime(), fileUrls, likes: [], replies: [], followers: [author], isLocked: false }; db.posts.push(newPost); notifyMentionsAndQuotes(content, author, title, newPost.id, db); writeDB(db); res.status(201).json(newPost); });
+app.post('/api/posts', upload.array('attachedFiles', 5), (req, res) => { const { author, title, content, category } = req.body; const db = readDB(); const user = db.users.find(u => u.username === author); if (category === "אקטואליה" && !isVeteran(user)) return res.status(403).json({ error: "אקטואליה סגורה." }); const fileUrls = req.files ? req.files.map(f => `/uploads/${f.filename}`) : []; const newPost = { id: Date.now(), lastUpdated: Date.now(), views: 0, author, title, category, content, date: getILTime(), fileUrls, likes: [], replies: [], followers: [author], isLocked: false }; db.posts.push(newPost); notifyMentionsAndQuotes(content, author, title, newPost.id, null, db); writeDB(db); res.status(201).json(newPost); });
 app.post('/api/posts/:id/follow', (req, res) => { const { username } = req.body; const db = readDB(); const post = db.posts.find(p => p.id === parseInt(req.params.id)); if (!post) return res.status(404).json({ error: "לא נמצא" }); const idx = post.followers.indexOf(username); if (idx > -1) post.followers.splice(idx, 1); else post.followers.push(username); writeDB(db); res.json({ success: true, followers: post.followers }); });
-app.post('/api/posts/:id/reply', upload.array('attachedFiles', 5), (req, res) => { const { author, content } = req.body; const db = readDB(); const post = db.posts.find(p => p.id === parseInt(req.params.id)); if (!post || post.isLocked) return res.status(403).json({ error: "שגיאה או אשכול נעול." }); const fileUrls = req.files ? req.files.map(f => `/uploads/${f.filename}`) : []; const newReply = { id: Date.now(), author, content, date: getILTime(), fileUrls, likes: [] }; post.replies.push(newReply); post.lastUpdated = Date.now(); post.followers.forEach(follower => { if (follower !== author) { const user = db.users.find(u => u.username === follower); if (user) user.notifications.push({ text: `תגובה חדשה מ-${author} באשכול: "${post.title}"`, threadId: post.id, isNew: true }); } }); notifyMentionsAndQuotes(content, author, post.title, post.id, db); writeDB(db); res.status(201).json(newReply); });
+app.post('/api/posts/:id/reply', upload.array('attachedFiles', 5), (req, res) => { const { author, content } = req.body; const db = readDB(); const post = db.posts.find(p => p.id === parseInt(req.params.id)); if (!post || post.isLocked) return res.status(403).json({ error: "שגיאה או אשכול נעול." }); const fileUrls = req.files ? req.files.map(f => `/uploads/${f.filename}`) : []; const newReply = { id: Date.now(), author, content, date: getILTime(), fileUrls, likes: [] }; post.replies.push(newReply); post.lastUpdated = Date.now(); post.followers.forEach(follower => { if (follower !== author) { const user = db.users.find(u => u.username === follower); if (user) user.notifications.push({ text: `תגובה חדשה מ-${author} באשכול: "${post.title}"`, threadId: post.id, replyId: newReply.id, isNew: true }); } }); notifyMentionsAndQuotes(content, author, post.title, post.id, newReply.id, db); writeDB(db); res.status(201).json(newReply); });
 app.delete('/api/posts/:id', (req, res) => { const db = readDB(); db.posts = db.posts.filter(p => p.id !== parseInt(req.params.id)); writeDB(db); res.json({ success: true }); });
 app.post('/api/posts/delete-reply', (req, res) => { const { username, postId, replyId } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); if (!user || user.role !== 'admin') return res.status(403).json({ error: "רק מנהל יכול למחוק." }); const post = db.posts.find(p => p.id === postId); if (post) { post.replies = post.replies.filter(r => r.id !== replyId); writeDB(db); } res.json({ success: true }); });
-app.post('/api/like', (req, res) => { const { username, postId, replyId } = req.body; const db = readDB(); const post = db.posts.find(p => p.id === postId); if (!post) return res.status(404).json({ error: "לא נמצא" }); let target = replyId ? post.replies.find(r => r.id === replyId) : post; if (target.author === username) return res.status(400).json({ error: "לייק עצמי חסום!" }); const targetUser = db.users.find(u => u.username === target.author); const likeIndex = target.likes.indexOf(username); if (likeIndex > -1) { target.likes.splice(likeIndex, 1); if (targetUser) { targetUser.totalLikes--; targetUser.veteranProgress--; } } else { target.likes.push(username); if (targetUser) { targetUser.totalLikes++; targetUser.veteranProgress++; targetUser.notifications.push({ text: `${username} עשה לייק להודעה שלך!`, threadId: post.id, isNew: true }); } } writeDB(db); res.json({ success: true }); });
+app.post('/api/like', (req, res) => { const { username, postId, replyId } = req.body; const db = readDB(); const post = db.posts.find(p => p.id === postId); if (!post) return res.status(404).json({ error: "לא נמצא" }); let target = replyId ? post.replies.find(r => r.id === replyId) : post; if (target.author === username) return res.status(400).json({ error: "לייק עצמי חסום!" }); const targetUser = db.users.find(u => u.username === target.author); const likeIndex = target.likes.indexOf(username); if (likeIndex > -1) { target.likes.splice(likeIndex, 1); if (targetUser) { targetUser.totalLikes--; targetUser.veteranProgress--; } } else { target.likes.push(username); if (targetUser) { targetUser.totalLikes++; targetUser.veteranProgress++; targetUser.notifications.push({ text: `${username} עשה לייק להודעה שלך!`, threadId: post.id, replyId: replyId, isNew: true }); } } writeDB(db); res.json({ success: true }); });
 
-// עריכת תוכן השרשור או התגובה
 app.put('/api/posts/edit', (req, res) => { const { username, postId, replyId, newContent } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); const post = db.posts.find(p => p.id === postId); let target = replyId ? post.replies.find(r => r.id === replyId) : post; if (!target) return res.status(404).json({ error: "לא נמצא" }); if (!user || (user.role !== 'admin' && user.role !== 'mod' && user.role !== 'editor' && target.author !== username)) return res.status(403).json({ error: "אין הרשאה." }); target.content = newContent + `\n\n[נערך לאחרונה ב-${getILTime()}]`; writeDB(db); res.json({ success: true }); });
-
-// שינוי כותרת האשכול
 app.put('/api/posts/rename', (req, res) => { const { username, postId, newTitle } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); if (!user || (user.role !== 'admin' && user.role !== 'editor')) return res.status(403).json({ error: "אין הרשאה." }); const post = db.posts.find(p => p.id === postId); if (post) { db.auditLogs.push({ id: Date.now(), date: getILTime(), editor: username, action: 'שינוי כותרת', details: `מ: "${post.title}" ל: "${newTitle}"` }); post.title = newTitle; writeDB(db); res.json({ success: true }); } else res.status(404).json({ error: "לא נמצא." }); });
 
-// פיצול אשכול (חדש!)
+// פיצול אשכול המעודכן (לפי מערך של תגובות נבחרות)
 app.post('/api/posts/split', (req, res) => {
-    const { username, postId, replyId, newTitle } = req.body; const db = readDB();
+    const { username, postId, replyIds, newTitle } = req.body; const db = readDB();
     const user = db.users.find(u => u.username === username);
     if (!user || (user.role !== 'admin' && user.role !== 'mod')) return res.status(403).json({ error: "אין הרשאה." });
     
     const post = db.posts.find(p => p.id === postId);
     if (!post) return res.status(404).json({error: "לא נמצא"});
     
-    const rIndex = post.replies.findIndex(r => r.id === replyId);
-    if (rIndex === -1) return res.status(404).json({error: "תגובה לא נמצאה"});
+    // משיכת התגובות המסומנות
+    const repliesToMove = post.replies.filter(r => replyIds.includes(r.id));
+    if (repliesToMove.length === 0) return res.status(400).json({error: "לא נבחרו תגובות לפיצול"});
     
-    // חותך את כל התגובות החל מהתגובה שנבחרה
-    const repliesToMove = post.replies.splice(rIndex);
-    const firstMsg = repliesToMove.shift(); // התגובה הראשונה הופכת להיות גוף האשכול החדש
+    // הסרתן מהאשכול המקורי
+    post.replies = post.replies.filter(r => !replyIds.includes(r.id));
+    
+    const firstMsg = repliesToMove.shift(); // הראשונה שסומנה הופכת לגוף האשכול
     
     const newPost = { 
         id: Date.now(), lastUpdated: Date.now(), views: 0, 
@@ -181,7 +220,7 @@ app.post('/api/posts/split', (req, res) => {
     db.posts.push(newPost);
     post.lastUpdated = Date.now();
     
-    db.auditLogs.push({ id: Date.now(), date: getILTime(), editor: username, action: 'פיצול אשכול', details: `מתוך: "${post.title}" -> לאשכול חדש: "${newTitle}"` });
+    db.auditLogs.push({ id: Date.now(), date: getILTime(), editor: username, action: 'פיצול אשכול מסומנים', details: `מתוך: "${post.title}" -> לאשכול חדש: "${newTitle}"` });
     writeDB(db); res.json({ success: true, newPostId: newPost.id });
 });
 
