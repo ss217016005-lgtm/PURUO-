@@ -862,19 +862,22 @@
             }
             
             const hiddenMark = p.isHidden ? '<span style="color:red; font-size:12px;">(מוסתר)</span> ' : '';
-            
             const authorInfo = usersInfo[p.author];
-            const avatarHtml = (authorInfo && authorInfo.avatar) ? `<img src="${authorInfo.avatar}" class="thread-avatar">` : `<div class="thread-avatar">👤</div>`;
+const avatarHtml = (authorInfo && authorInfo.avatar) ? `<img src="${authorInfo.avatar}" class="thread-avatar">` : `<div class="thread-avatar">👤</div>`;
 
-            return `
-            <div class="thread-card ${p.isLocked ? 'thread-locked' : ''}" onclick="openThread(${p.id})">
-                <div class="thread-main-info">
-                    ${avatarHtml}
-                    <div class="thread-text-info">
-                        <h3 class="thread-title">${p.isLocked ? '🔒 ' : ''}${hiddenMark}${tagHtml}${p.title} ${isUnread ? '<span class="unread-badge">חדש</span>' : ''}</h3>
-                        <div class="thread-meta">מאת: <strong class="clickable-user" onclick="showUserProfile('${p.author}'); event.stopPropagation();">${p.author}</strong> | ${p.date}</div>
-                    </div>
-                </div>
+// יצירת תגית הקטגוריה עם הצבע המתאים לה
+const catColor = typeof getCatColor === 'function' ? getCatColor(p.category) : '#3b82f6';
+const categoryBadge = `<span style="background: ${catColor}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-left: 5px; vertical-align: middle;">📁 ${p.category}</span>`;
+
+return `
+<div class="thread-card ${p.isLocked ? 'thread-locked' : ''}" onclick="openThread(${p.id})">
+    <div class="thread-main-info">
+        ${avatarHtml}
+        <div class="thread-text-info">
+            <h3 class="thread-title">${p.isLocked ? '🔒 ' : ''}${hiddenMark}${categoryBadge}${tagHtml}${p.title} ${isUnread ? '<span class="unread-badge">חדש</span>' : ''}</h3>
+            <div class="thread-meta">מאת: <strong class="clickable-user" onclick="showUserProfile('${p.author}'); event.stopPropagation();">${p.author}</strong> | ${p.date}</div>
+        </div>
+    </div>
                 <div class="thread-stats">
                     <div>👁️ ${p.views}<br>צפיות</div>
                     <div>💬 ${visibleReplies.length}<br>תגובות</div>
