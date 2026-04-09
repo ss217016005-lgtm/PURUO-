@@ -54,7 +54,7 @@
 
         <div class="tabs">
             <button class="active" onclick="switchTab('tab-users')">👥 משתמשים</button>
-            <button onclick="switchTab('tab-pending')">📋 ממתינים לאישור (תוכן)</button>
+            <button onclick="switchTab('tab-pending')">📋 ממתינים לאישור</button>
             <button onclick="switchTab('tab-settings')">⚙️ הגדרות</button>
             <button onclick="switchTab('tab-reports')">🚨 דיווחים</button>
             <button onclick="switchTab('tab-cats')">🗂️ קטגוריות ותגיות</button>
@@ -64,8 +64,11 @@
         </div>
 
         <div id="tab-users" class="section active" style="border-right: 5px solid #8e44ad;">
-            <h2 style="color: #d35400;">🔔 משתמשים הממתינים לאישור</h2>
+            <h2 style="color: #d35400;">🔔 ממתינים לאישור (משתמשים חדשים)</h2>
             <ul id="pendingUsersList" style="list-style: none; padding: 0;"></ul>
+            <hr>
+            <h2 style="color: #d35400;">📸 תמונות פרופיל ממתינות לאישור</h2>
+            <div id="pendingAvatarsList" style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom: 20px;"></div>
             <hr>
             <h2 style="color: #8e44ad;">👥 ניהול משתמשים ומעקב פעילות (ריגול)</h2>
             <table>
@@ -200,6 +203,17 @@
                     li.appendChild(strong); li.appendChild(btn); pendingList.appendChild(li);
                 });
             }
+
+            // תמונות פרופיל ממתינות
+            const avRes = await fetch('/api/admin/pending-avatars'); const avatars = await avRes.json();
+            document.getElementById('pendingAvatarsList').innerHTML = avatars.length === 0 ? "אין תמונות ממתינות." : avatars.map(a => `
+                <div style="background:#fff; border:1px solid #ccc; padding:10px; border-radius:8px; text-align:center; width: 140px;">
+                    <strong>${a.username}</strong><br>
+                    <img src="${a.pendingAvatar}" style="width:100px; height:100px; object-fit:cover; border-radius:50%; margin:10px 0; border:1px solid #ddd;"><br>
+                    <button class="btn-approve" onclick="approveAvatar('${a.username.replace(/'/g,"\\'")}', true)">אשר</button>
+                    <button class="btn-delete" onclick="approveAvatar('${a.username.replace(/'/g,"\\'")}', false)">דחה</button>
+                </div>
+            `).join('');
             
             document.getElementById('allUsersTable').innerHTML = users.map(u => {
                 let roleStr = u.role === 'admin' ? '👑 מנהל' : (u.role === 'editor' ? '📝 עורך תוכן' : (u.role === 'mod' ? '🛡️ מפקח' : '👤 משתמש'));
@@ -238,6 +252,11 @@
 
             const mRes = await fetch('/api/admin/all-messages'); allPmsCache = await mRes.json();
             renderPMs(allPmsCache);
+        }
+
+        async function approveAvatar(targetUser, approve) {
+            await fetch('/api/admin/approve-avatar', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adminUser, targetUser, approve}) });
+            loadData();
         }
 
         async function loadPendingContent() {
