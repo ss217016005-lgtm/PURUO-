@@ -240,7 +240,6 @@
             renderPMs(allPmsCache);
         }
 
-        // ניהול תוכן ממתין לאישור
         async function loadPendingContent() {
             const res = await fetch('/api/admin/pending-content'); const pending = await res.json();
             document.getElementById('pendingContentTable').innerHTML = pending.length === 0 ? "<tr><td colspan='5' style='text-align:center;'>אין הודעות שממתינות לאישור.</td></tr>" :
@@ -260,7 +259,6 @@
             loadPendingContent();
         }
 
-        // ניהול הגבלות
         function openRestrictions(username, requiresApproval, restrictedCatsJson) {
             currentEditingUser = username;
             document.getElementById('restUserLabel').innerText = username;
