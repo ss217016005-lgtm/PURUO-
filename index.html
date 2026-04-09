@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>פורום פרומרקייט</title>
     <style>
-        :root{--primary:#4F46E5;--secondary:#EC4899;--bg:#F3F4F6;--box-bg:#FFFFFF;--text:#1F2937;--border:#E5E7EB}
+        :root{--primary:#4F46E5;--secondary:#EC4899;--bg:#F3F4F6;--box-bg:#FFFFFF;--text:#1F2937;--border:#E5E7EB; --hover-bg: #f9fafb;}
         body{font-family:'Segoe UI',Tahoma,sans-serif;background:var(--bg);margin:0;color:var(--text)}
         .header{background:linear-gradient(135deg,var(--primary),var(--secondary));color:white;padding:25px;text-align:center;box-shadow:0 4px 6px rgba(0,0,0,0.1)}
         .header h1{margin:0;font-size:32px;font-weight:800;text-shadow:1px 1px 2px rgba(0,0,0,0.2)}
@@ -18,10 +18,26 @@
         button:disabled{opacity:0.6;cursor:not-allowed}
         .btn-action{background:#f3f4f6;color:#4b5563;border:1px solid #d1d5db;font-size:13px;padding:6px 10px;border-radius:6px;cursor:pointer;display:inline-block;margin-left:5px}
         .btn-action.liked{background:#fbcfe8;color:#be185d;border-color:#f9a8d4}
-        .thread-card{border:1px solid var(--border);padding:15px;border-radius:10px;margin-bottom:15px;background:#ffffff;cursor:pointer;transition:0.2s;display:flex;flex-direction:column}
-        .thread-card:hover{transform:translateX(-3px);box-shadow:0 4px 10px rgba(0,0,0,0.05)}
-        .thread-title{font-size:20px;font-weight:bold;color:var(--primary);margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-        .cat-tag{padding:3px 8px;border-radius:6px;color:white;font-size:12px;font-weight:bold}
+        
+        /* עיצוב שורות מקצועי לאשכולות (דומה לפרוג/מתמחים) */
+        .thread-list-container { border: 1px solid var(--border); border-radius: 8px; background: white; overflow: hidden; }
+        .thread-card { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 15px; cursor: pointer; transition: 0.2s; background: white; }
+        .thread-card:last-child { border-bottom: none; }
+        .thread-card:hover { background: var(--hover-bg); }
+        .thread-locked { background: #fafafa; opacity: 0.8; }
+        
+        .thread-main-info { display: flex; align-items: center; gap: 15px; flex: 1; }
+        .thread-avatar { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; border: 1px solid #ddd; }
+        .thread-text-info { display: flex; flex-direction: column; gap: 5px; }
+        .thread-title { font-size: 18px; font-weight: bold; color: var(--primary); display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0;}
+        .thread-meta { font-size: 12px; color: #6B7280; }
+        
+        .thread-stats { display: flex; gap: 20px; align-items: center; text-align: center; color: #6B7280; font-size: 12px; min-width: 120px; justify-content: flex-end; padding-left: 15px; border-left: 1px solid #eee; }
+        .thread-last-reply { text-align: right; font-size: 12px; color: #6B7280; min-width: 150px; display: flex; flex-direction: column; gap: 3px; }
+        .thread-last-reply .user-name { font-weight: bold; color: var(--text); }
+        
+        .cat-tag{padding:3px 8px;border-radius:6px;color:white;font-size:11px;font-weight:bold; letter-spacing: 0.5px;}
+        
         .post-container{display:flex;background:#f9fafb;border:1px solid var(--border);border-radius:10px;margin-bottom:15px;overflow:hidden; scroll-margin-top: 20px;}
         .user-panel{background:#f3f4f6;padding:15px;width:160px;text-align:center;border-left:1px solid var(--border)}
         .content-panel{padding:15px;flex:1;display:flex;flex-direction:column; position: relative;}
@@ -33,7 +49,7 @@
         .spoiler summary{background:#e5e7eb;padding:10px;cursor:pointer;font-weight:bold;color:#374151}
         .spoiler-content{padding:15px;border-top:1px solid #ccc;background:#f9fafb}
         .tagged-user{color:#4F46E5;font-weight:bold;background:#e0e7ff;padding:0 4px;border-radius:4px;cursor:pointer}
-        .unread-badge{color:red;font-size:12px;font-weight:bold;background:#fee2e2;padding:2px 6px;border-radius:4px}
+        .unread-badge{color:red;font-size:11px;font-weight:bold;background:#fee2e2;padding:2px 6px;border-radius:4px}
         .clickable-user{cursor:pointer;color:var(--primary);text-decoration:underline;text-decoration-color:transparent;transition:0.2s}
         .clickable-user:hover{text-decoration-color:var(--primary)}
         .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(2px)}
@@ -56,7 +72,7 @@
         .poll-option { display:flex; justify-content:space-between; background:white; padding:8px 15px; margin-bottom:8px; border-radius:4px; border:1px solid #ddd; cursor:pointer; }
         .poll-option:hover { background:#e2e8f0; }
         .poll-bar { background: #10b981; height: 5px; border-radius: 3px; margin-top: 5px; transition: width 0.5s; }
-        .user-avatar { width:60px; height:60px; border-radius:50%; object-fit:cover; margin-bottom:5px; border:2px solid var(--border); }
+        .user-avatar-large { width:60px; height:60px; border-radius:50%; object-fit:cover; margin-bottom:5px; border:2px solid var(--border); }
         .user-signature { border-top:1px dashed #ccc; padding-top:10px; margin-top:15px; font-size:13px; color:#6b7280; font-style:italic; }
     </style>
 </head>
@@ -160,7 +176,7 @@
             <div id="threadsView">
                 <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap:wrap;">
                     <select id="categorySelect" onchange="renderThreads()" style="flex: 2; margin: 0; font-weight: bold; min-width:200px;"></select>
-                    <button onclick="renderCategoryView()" style="background:#f59e0b; padding: 10px 15px;">🗂️ תצוגה לפי נושאים</button>
+                    <button onclick="toggleArchiveView()" id="archiveToggleBtn" style="background:#8b5cf6; padding: 10px 15px;">📉 אשכולות פחות רלוונטיים</button>
                     <button onclick="markAllAsRead()" style="background:#6B7280; padding: 10px 15px;">✔️ סמן הכל כנקרא</button>
                     <button onclick="toggleNewThreadForm()" style="flex: 1; background: var(--secondary); min-width:150px;">+ פתח אשכול</button>
                 </div>
@@ -190,7 +206,9 @@
                         <button id="postThreadBtn" onclick="createThread()">פרסם אשכול</button>
                     </div>
                 </div>
-                <div id="threadsList"></div>
+                
+                <h3 id="archiveHeader" class="hidden" style="color:#8b5cf6; border-bottom:2px solid #8b5cf6; padding-bottom:5px;">📉 אשכולות פחות רלוונטיים (תגובה תחזיר אותם לפורום הראשי)</h3>
+                <div id="threadsList" class="thread-list-container"></div>
             </div>
 
             <div id="singleThreadView" class="hidden">
@@ -232,6 +250,7 @@
         let lastUnreadCount = 0, lastUnreadMsgs = 0;
         let isSubmitting = false;
         let isSplitMode = false;
+        let viewingArchived = false;
 
         const catColors = { "תמונות והסרטות": "#3b82f6", "עזרה הדדית": "#10b981", "בית המדרש": "#8b5cf6", "הלכה למעשה": "#d946ef", "כתבי רבותינו": "#f59e0b", "קורות דורות": "#06b6d4", "אקטואליה": "#ef4444", "הפורום שלנו": "#f97316", "חדשות בציבור": "#64748b" };
         function getCatColor(cat) { return catColors[cat] || "#6B7280"; }
@@ -472,7 +491,7 @@
             hideAllViews(); document.getElementById('userProfileView').classList.remove('hidden'); document.getElementById('searchContainer').classList.add('hidden');
             const info = usersInfo[username]; if (!info) return;
             
-            let avatarHtml = info.avatar ? `<img src="${info.avatar}" style="width:100px; height:100px; border-radius:50%; object-fit:cover; margin-bottom:10px;">` : `<div style="width:100px; height:100px; border-radius:50%; background:#e5e7eb; display:flex; align-items:center; justify-content:center; font-size:40px; margin-bottom:10px;">👤</div>`;
+            let avatarHtml = info.avatar ? `<img src="${info.avatar}" class="user-avatar-large">` : `<div style="width:60px; height:60px; border-radius:50%; background:#e5e7eb; display:flex; align-items:center; justify-content:center; font-size:24px; margin-bottom:5px;">👤</div>`;
             
             let userPostsHtml = "<h4>פעילות בפורום:</h4>"; let found = 0;
             postsData.forEach(p => {
@@ -777,6 +796,7 @@
             else { const currentOpenId = parseInt(document.getElementById('singleThreadView').getAttribute('data-current-id')); if(currentOpenId) openThread(currentOpenId, true); else renderThreads(); }
         }
 
+        // עריכה של ציטוט בפורום עצמו - מקלף ציטוטים פנימיים
         window.handleQuote = function(postId, replyId) {
             const p = postsData.find(x => x.id === postId);
             const target = replyId ? p.replies.find(r => r.id === replyId) : p;
@@ -792,6 +812,7 @@
             document.getElementById('replyContent').focus(); 
         };
 
+        // עדכון עיצוב כרטיסיית אשכול לדומה לפורומים גדולים בישראל (שורות רחבות)
         function generateThreadCard(p) {
             if (p.isHidden && currentUserRole !== 'admin' && currentUserRole !== 'mod') return '';
             
@@ -803,40 +824,72 @@
             if(p.tag) {
                 const tObj = tagsData.find(t => t.name === p.tag);
                 const tColor = tObj ? tObj.color : '#888';
-                tagHtml = `<span class="cat-tag" style="background:${tColor}; margin-right:5px; font-size:14px;">🏷️ ${p.tag}</span>`;
+                tagHtml = `<span class="cat-tag" style="background:${tColor}; margin-right:5px; font-size:12px;">🏷️ ${p.tag}</span>`;
             }
             
             const hiddenMark = p.isHidden ? '<span style="color:red; font-size:12px;">(מוסתר)</span> ' : '';
+            
+            const authorInfo = usersInfo[p.author];
+            const avatarHtml = (authorInfo && authorInfo.avatar) ? `<img src="${authorInfo.avatar}" class="thread-avatar">` : `<div class="thread-avatar">👤</div>`;
 
             return `
             <div class="thread-card ${p.isLocked ? 'thread-locked' : ''}" onclick="openThread(${p.id})">
-                <div class="thread-title">${p.isLocked ? '🔒 ' : ''}${hiddenMark}<span class="cat-tag" style="background:${getCatColor(p.category)};">${p.category}</span>${tagHtml}${p.title} ${isUnread ? '<span class="unread-badge">חדש</span>' : ''}</div>
-                <div style="font-size: 13px; color: #6B7280; display: flex; justify-content: space-between; margin-top:5px; border-top: 1px solid #eee; padding-top: 5px;">
-                    <div>
-                        <span>מאת: <strong class="clickable-user" onclick="showUserProfile('${p.author}'); event.stopPropagation();">${p.author}</strong></span><br>
-                        <span style="font-size:11px;">👁️ ${p.views} צפיות | 💬 ${visibleReplies.length} תגובות</span>
+                <div class="thread-main-info">
+                    ${avatarHtml}
+                    <div class="thread-text-info">
+                        <h3 class="thread-title">${p.isLocked ? '🔒 ' : ''}${hiddenMark}${tagHtml}${p.title} ${isUnread ? '<span class="unread-badge">חדש</span>' : ''}</h3>
+                        <div class="thread-meta">מאת: <strong class="clickable-user" onclick="showUserProfile('${p.author}'); event.stopPropagation();">${p.author}</strong> | ${p.date}</div>
                     </div>
-                    <div style="text-align:left; font-size: 12px; color: #888;">
-                        <span>הודעה אחרונה מ: <strong class="clickable-user" onclick="showUserProfile('${lastMsg.author}'); event.stopPropagation();">${lastMsg.author}</strong></span><br>
-                        <span>${lastMsg.date}</span>
-                    </div>
+                </div>
+                <div class="thread-stats">
+                    <div>👁️ ${p.views}<br>צפיות</div>
+                    <div>💬 ${visibleReplies.length}<br>תגובות</div>
+                </div>
+                <div class="thread-last-reply">
+                    <span>הודעה אחרונה מ:</span>
+                    <span class="user-name clickable-user" onclick="showUserProfile('${lastMsg.author}'); event.stopPropagation();">${lastMsg.author}</span>
+                    <span>${lastMsg.date}</span>
                 </div>
             </div>`;
         }
 
+        window.toggleArchiveView = function() {
+            viewingArchived = !viewingArchived;
+            const btn = document.getElementById('archiveToggleBtn');
+            const header = document.getElementById('archiveHeader');
+            if (viewingArchived) {
+                btn.innerHTML = '🏠 חזור לפורום ראשי';
+                btn.style.background = '#10b981';
+                header.classList.remove('hidden');
+            } else {
+                btn.innerHTML = '📉 אשכולות פחות רלוונטיים';
+                btn.style.background = '#8b5cf6';
+                header.classList.add('hidden');
+            }
+            renderThreads();
+        };
+
         function renderThreads() {
             hideAllViews(); document.getElementById('searchContainer').classList.remove('hidden'); document.getElementById('threadsView').classList.remove('hidden');
-            const cat = document.getElementById('categorySelect').value; let filtered = postsData.filter(p => p.isApproved);
+            const cat = document.getElementById('categorySelect').value; 
+            let filtered = postsData.filter(p => p.isApproved && (p.isArchived === viewingArchived));
+            
             const isVet = usersInfo[currentUser] && (usersInfo[currentUser].isVeteran || currentUserRole === 'admin' || currentUserRole === 'mod' || currentUserRole === 'editor');
             if (!isVet) filtered = filtered.filter(p => p.category !== 'אקטואליה');
             if (cat) filtered = filtered.filter(p => p.category === cat);
-            document.getElementById('threadsList').innerHTML = filtered.map(generateThreadCard).join('');
+            
+            document.getElementById('threadsList').innerHTML = filtered.length > 0 ? filtered.map(generateThreadCard).join('') : '<div style="padding: 20px; text-align: center; color: #666;">אין אשכולות להצגה כאן.</div>';
         }
 
         function renderCategoryView() {
             hideAllViews(); document.getElementById('searchContainer').classList.remove('hidden'); document.getElementById('threadsView').classList.remove('hidden');
             let html = ''; const cats = Array.from(document.getElementById('categorySelect').options).map(o => o.value).filter(v => v);
-            cats.forEach(c => { const catPosts = postsData.filter(p => p.category === c && p.isApproved); if(catPosts.length > 0) { html += `<h3 style="margin-top:20px; border-bottom:2px solid ${getCatColor(c)}; color:${getCatColor(c)}; padding-bottom:5px;">📁 ${c}</h3>` + catPosts.map(generateThreadCard).join(''); }});
+            cats.forEach(c => { 
+                const catPosts = postsData.filter(p => p.category === c && p.isApproved && (p.isArchived === viewingArchived)); 
+                if(catPosts.length > 0) { 
+                    html += `<h3 style="margin-top:20px; border-bottom:2px solid ${getCatColor(c)}; color:${getCatColor(c)}; padding-bottom:5px;">📁 ${c}</h3>` + catPosts.map(generateThreadCard).join(''); 
+                }
+            });
             document.getElementById('threadsList').innerHTML = html;
         }
 
@@ -933,17 +986,20 @@
             }
 
             const authorInfo = usersInfo[p.author];
-            const avatarHtml = (authorInfo && authorInfo.avatar) ? `<img src="${authorInfo.avatar}" class="user-avatar">` : `<div style="width:60px; height:60px; border-radius:50%; background:#e5e7eb; display:flex; align-items:center; justify-content:center; font-size:24px; margin:0 auto 5px auto;">👤</div>`;
+            const avatarHtml = (authorInfo && authorInfo.avatar) ? `<img src="${authorInfo.avatar}" class="user-avatar-large">` : `<div style="width:60px; height:60px; border-radius:50%; background:#e5e7eb; display:flex; align-items:center; justify-content:center; font-size:24px; margin:0 auto 5px auto;">👤</div>`;
             const signatureHtml = (authorInfo && authorInfo.signature) ? `<div class="user-signature">${authorInfo.signature}</div>` : '';
 
             const moveBtn = (isMain && canEditPostMeta) ? `<button class="btn-action" onclick="triggerMove(${p.id})">📂 העבר</button>` : '';
             const renameBtn = (isMain && canEditPostMeta) ? `<button class="btn-action" onclick="triggerRename(${p.id}, '${p.title.replace(/'/g,"\\'")}')">✏️ שנה כותרת</button>` : '';
             const lockBtn = (isMain && canMod) ? `<button class="btn-action" onclick="triggerLock(${p.id})">${p.isLocked ? '🔓 שחרר' : '🔒 נעל'}</button>` : '';
             const hideBtn = canMod ? `<button class="btn-action" style="color:#d97706;" onclick="toggleHidePost(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">👁️ ${p.isHidden ? 'בטל הסתרה' : 'הסתר'}</button>` : '';
+            
+            // כפתור העברה לארכיון או החזרה לראשי
+            const archiveBtn = (isMain && canMod) ? `<button class="btn-action" style="color:#8b5cf6;" onclick="toggleArchive(${p.id})">📉 ${p.isArchived ? 'החזר לראשי' : 'סמן כפחות רלוונטי'}</button>` : '';
+            
             const deleteBtn = (!isMain && currentUserRole === 'admin') ? `<button class="btn-action" style="color:red;" onclick="deleteReply(${parentPost.id}, ${p.id})">🗑️ מחק</button>` : '';
             
             const likesList = p.likes.length > 0 ? 'לייקים מ: \n' + p.likes.join('\n') : 'תהיה הראשון לעשות לייק!';
-            
             const splitCheckbox = (!isMain && canMod) ? `<input type="checkbox" class="split-cb ${isSplitMode ? '' : 'hidden'}" value="${p.id}">` : '';
 
             let tagHtml = '';
@@ -972,7 +1028,7 @@
                         ${(!parentPost || !parentPost.isLocked) ? `<button class="btn-action" onclick="handleQuote(${parentPost ? parentPost.id : p.id}, ${isMain ? 'null' : p.id})">💬 צטט</button>` : ''}
                         <button class="btn-action" style="color:#b91c1c;" onclick="triggerReport(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">🚨 דווח</button>
                         ${canEditContent ? `<button class="btn-action" style="color:#b45309;" onclick="triggerEdit(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">✏️ עריכת תוכן</button>` : ''}
-                        ${renameBtn} ${moveBtn} ${lockBtn} ${hideBtn} ${deleteBtn}
+                        ${renameBtn} ${moveBtn} ${lockBtn} ${hideBtn} ${archiveBtn} ${deleteBtn}
                     </div>
                 </div>
             </div>`;
@@ -985,6 +1041,11 @@
 
         window.toggleHidePost = async function(postId, replyId) {
             await fetch('/api/posts/hide', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId, replyId}) });
+            loadPosts();
+        }
+        
+        window.toggleArchive = async function(postId) {
+            await fetch('/api/posts/archive', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId}) });
             loadPosts();
         }
 
