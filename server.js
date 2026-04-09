@@ -259,20 +259,35 @@ app.put('/api/posts/archive', (req, res) => {
     writeDB(db); res.json({success: true, isArchived: post.isArchived});
 });
 
-app.delete('/api/posts/:id', (req, res) => { const db = readDB(); db.posts = db.posts.filter(p => p.id !== parseInt(req.params.id)); writeDB(db); res.json({ success: true }); });
-app.post('/api/posts/delete-reply', (req, res) => { const { username, postId, replyId } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); if (!user || user.role !== 'admin') return res.status(403).json({ error: "רק מנהל יכול למחוק." }); const post = db.posts.find(p => p.id === postId); if (post) { post.replies = post.replies.filter(r => r.id !== replyId); writeDB(db); } res.json({ success: true }); });
-
-app.put('/api/posts/hide', (req, res) => {
-    const { username, postId, replyId } = req.body; const db = readDB();
-    const user = db.users.find(u => u.username === username);
-    if (!user || (user.role !== 'admin' && user.role !== 'mod')) return res.status(403).json({ error: "אין הרשאה." });
-    const post = db.posts.find(p => p.id === postId);
-    if (!post) return res.status(404).json({error: "לא נמצא"});
-    if (replyId) { let target = post.replies.find(r => r.id === replyId); if(target) { target.isHidden = !target.isHidden; writeDB(db); res.json({success: true}); } else res.status(404).json({error: "לא נמצא"}); } 
-    else { post.isHidden = !post.isHidden; writeDB(db); res.json({success: true}); }
+app.post('/api/posts/delete-reply', (req, res) => { 
+    const { username, postId, replyId } = req.body; 
+    const db = readDB(); 
+    const user = db.users.find(u => u.username === username); 
+    
+    if (!user || user.role !== 'admin') return res.status(403).json({ error: "רק מנהל יכול למחוק." }); 
+    
+    const post = db.posts.find(p => p.id === postId); 
+    if (post) { 
+        const replyIndex = post.replies.findIndex(r => r.id === replyId);
+        if (replyIndex !== -1) {
+            const reply = post.replies[replyIndex];
+            // הוספת רישום למעקב הפעולות
+            db.auditLogs.push({ 
+                id: Date.now(), 
+                date: getILTime(), 
+                editor: username, 
+                action: 'מחיקת תגובה', 
+                details: `תגובה של ${reply.author} באשכול "${post.title}" נמחקה.` 
+            });
+            post.replies.splice(replyIndex, 1);
+            writeDB(db);
+            return res.json({ success: true });
+        }
+    } 
+    res.status(404).json({ error: "לא נמצא." }); 
 });
 
-app.post('/api/like', (req, res) => { const { username, postId, replyId } = req.body; const db = readDB(); const post = db.posts.find(p => p.id === postId); if (!post) return res.status(404).json({ error: "לא נמצא" }); let target = replyId ? post.replies.find(r => r.id === replyId) : post; if (target.author === username) return res.status(400).json({ error: "לייק עצמי חסום!" }); const targetUser = db.users.find(u => u.username === target.author); const likeIndex = target.likes.indexOf(username); if (likeIndex > -1) { target.likes.splice(likeIndex, 1); if (targetUser) { targetUser.totalLikes--; targetUser.veteranProgress--; } } else { target.likes.push(username); if (targetUser) { targetUser.totalLikes++; targetUser.veteranProgress++; targetUser.notifications.push({ text: `${username} עשה לייק להודעה שלך!`, threadId: post.id, replyId: replyId, isNew: true }); } } writeDB(db); res.json({ success: true }); });
+app.post('/api/like', (req, res) => { const { username, postId, replyId } = req.body; const db = readDB(); const post = db.posts.find(p => p.id === postId); if (!post) return res.status(404).json({ error: "לא נמצא" }); let target = replyId ? post.replies.find(r => r.id === replyId) : post; if (target.author === username) return res.status(400).json({ error: "לייק עצמי חסום!" }); const targetUser = db.users.find(u => u.username === target.author); const likeIndex = target.likes.indexOf(username); if (likeIndex > -1) { target.likes.splice(likeIndex, 1); if (targetUser) { targetUser.totalLikes--; targetUser.veteranProgress--; } } else { target.likes.push(username); if (targetUser) { targetUser.totalLikes++; targetUser.veteranProgress++; targetUser.notifications.push({ text: `${username} עשה לייק להודעה שלך!`, threadId: post.id, replyId: replyId, isNew: true }); } } writeDB(db); res.json({ success: true }); })
 
 // תמיכה ב"נערך לאחרונה" קטן
 app.put('/api/posts/edit', (req, res) => { 
