@@ -26,9 +26,26 @@
         .form-group { margin-bottom: 15px; }
         .form-group label { font-weight: bold; display: block; margin-bottom: 5px; }
         .form-group textarea, .form-group input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-box { background: white; padding: 20px; border-radius: 8px; width: 400px; text-align: right; }
     </style>
 </head>
 <body>
+    <div id="restModal" class="modal-overlay" style="display:none;">
+        <div class="modal-box">
+            <h2 style="margin-top:0; color:#c0392b;">הגבלות משתמש: <span id="restUserLabel"></span></h2>
+            <label style="font-weight:bold; cursor:pointer;">
+                <input type="checkbox" id="restRequiresApproval"> כל הודעה שלו דורשת אישור הנהלה
+            </label>
+            <h4 style="margin-bottom:5px;">מנע כתיבה בקטגוריות הבאות:</h4>
+            <div id="restCatsList" style="max-height:150px; overflow-y:auto; border:1px solid #ccc; padding:10px; border-radius:4px; margin-bottom:15px;"></div>
+            <div style="text-align:left;">
+                <button class="btn-approve" onclick="saveRestrictions()">שמור הגבלות</button>
+                <button class="btn-delete" onclick="document.getElementById('restModal').style.display='none'">ביטול</button>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <div class="header">
             <h1 style="margin: 0; color: #2c3e50;">⚙️ מרכז ניהול - פרומרקייט</h1>
@@ -37,22 +54,32 @@
 
         <div class="tabs">
             <button class="active" onclick="switchTab('tab-users')">👥 משתמשים</button>
+            <button onclick="switchTab('tab-pending')">📋 ממתינים לאישור (תוכן)</button>
             <button onclick="switchTab('tab-settings')">⚙️ הגדרות</button>
             <button onclick="switchTab('tab-reports')">🚨 דיווחים</button>
             <button onclick="switchTab('tab-cats')">🗂️ קטגוריות ותגיות</button>
-            <button onclick="switchTab('tab-posts')">🗑️ ניהול אשכולות</button>
+            <button onclick="switchTab('tab-posts')">🗑️ אשכולות</button>
             <button onclick="switchTab('tab-pms')">✉️ חיפוש בפרטיות</button>
             <button onclick="switchTab('tab-audit')">📖 יומן עורכים</button>
         </div>
 
         <div id="tab-users" class="section active" style="border-right: 5px solid #8e44ad;">
-            <h2 style="color: #d35400;">🔔 ממתינים לאישור</h2>
+            <h2 style="color: #d35400;">🔔 משתמשים הממתינים לאישור</h2>
             <ul id="pendingUsersList" style="list-style: none; padding: 0;"></ul>
             <hr>
             <h2 style="color: #8e44ad;">👥 ניהול משתמשים ומעקב פעילות (ריגול)</h2>
             <table>
                 <thead><tr><th>שם משתמש</th><th>תפקיד</th><th>כתובת IP</th><th>מה עושה עכשיו?</th><th>פעולה</th></tr></thead>
                 <tbody id="allUsersTable"></tbody>
+            </table>
+        </div>
+
+        <div id="tab-pending" class="section" style="border-right: 5px solid #16a085;">
+            <h2 style="color: #16a085; margin-top: 0;">📋 תוכן הממתין לאישור הנהלה</h2>
+            <p>הודעות ואשכולות אלו נכתבו על ידי משתמשים מוגבלים ולא יוצגו בפורום עד שתאשר אותם.</p>
+            <table>
+                <thead><tr><th>תאריך</th><th>מאת</th><th>סוג</th><th>תוכן</th><th>פעולה</th></tr></thead>
+                <tbody id="pendingContentTable"></tbody>
             </table>
         </div>
 
@@ -141,12 +168,14 @@
         const adminUser = localStorage.getItem('forumUser') || sessionStorage.getItem('forumUser');
         let allPmsCache = [];
         let currentCategories = [];
+        let currentEditingUser = null;
 
         function switchTab(tabId) {
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
             document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
             event.target.classList.add('active');
+            if(tabId === 'tab-pending') loadPendingContent();
         }
 
         async function loadData() {
@@ -183,7 +212,10 @@
                     if (u.role !== 'editor') promoteBtns += `<button class="btn-editor" onclick="setRole('${u.username.replace(/'/g, "\\'")}', 'editor')">מנה לעורך</button>`;
                     if (u.role !== 'user') promoteBtns += `<button class="btn-delete" style="background:#6B7280;" onclick="setRole('${u.username.replace(/'/g, "\\'")}', 'user')">הסר תפקיד</button>`;
                 }
-                return `<tr><td><strong>${u.username.replace(/</g, "&lt;")}</strong></td><td>${roleStr}</td><td style="font-family:monospace;">${u.ip || 'לא ידוע'}</td><td>${activity}</td><td>${u.role !== 'admin' ? `${promoteBtns} <button class="btn-delete" onclick="deleteUser('${u.username.replace(/'/g, "\\'")}')">מחק</button>` : '<span style="color:gray;">מנהל</span>'}</td></tr>`;
+                
+                const restrictBtn = u.role !== 'admin' ? `<button class="btn-mod" style="background:#e67e22;" onclick="openRestrictions('${u.username.replace(/'/g, "\\'")}', ${u.requiresApproval}, '${JSON.stringify(u.restrictedCats || [])}')">🛑 הגבלות</button>` : '';
+
+                return `<tr><td><strong>${u.username.replace(/</g, "&lt;")}</strong></td><td>${roleStr}</td><td style="font-family:monospace;">${u.ip || 'לא ידוע'}</td><td>${activity}</td><td>${restrictBtn} ${u.role !== 'admin' ? `${promoteBtns} <button class="btn-delete" onclick="deleteUser('${u.username.replace(/'/g, "\\'")}')">מחק</button>` : '<span style="color:gray;">מנהל</span>'}</td></tr>`;
             }).join('');
 
             const cRes = await fetch('/api/categories'); currentCategories = await cRes.json();
@@ -206,6 +238,50 @@
 
             const mRes = await fetch('/api/admin/all-messages'); allPmsCache = await mRes.json();
             renderPMs(allPmsCache);
+        }
+
+        // ניהול תוכן ממתין לאישור
+        async function loadPendingContent() {
+            const res = await fetch('/api/admin/pending-content'); const pending = await res.json();
+            document.getElementById('pendingContentTable').innerHTML = pending.length === 0 ? "<tr><td colspan='5' style='text-align:center;'>אין הודעות שממתינות לאישור.</td></tr>" :
+                pending.map(p => `<tr>
+                    <td>${p.date}</td>
+                    <td><strong>${p.author}</strong></td>
+                    <td>${p.type === 'post' ? 'אשכול חדש' : 'תגובה'}</td>
+                    <td><strong>${p.title}</strong><br><small style="white-space:pre-wrap;">${p.content}</small></td>
+                    <td>
+                        <button class="btn-approve" onclick="approveContent('${p.type}', ${p.postId}, ${p.replyId || 'null'})">✔️ אשר לפרסום</button>
+                    </td>
+                </tr>`).join('');
+        }
+
+        async function approveContent(type, postId, replyId) {
+            await fetch('/api/admin/approve-content', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: adminUser, type, postId, replyId}) });
+            loadPendingContent();
+        }
+
+        // ניהול הגבלות
+        function openRestrictions(username, requiresApproval, restrictedCatsJson) {
+            currentEditingUser = username;
+            document.getElementById('restUserLabel').innerText = username;
+            document.getElementById('restRequiresApproval').checked = requiresApproval;
+            
+            let cats = [];
+            try { cats = JSON.parse(restrictedCatsJson); } catch(e){}
+            
+            document.getElementById('restCatsList').innerHTML = currentCategories.map(c => `
+                <label style="display:block; cursor:pointer;"><input type="checkbox" class="rest-cat-cb" value="${c.replace(/"/g, '&quot;')}" ${cats.includes(c) ? 'checked' : ''}> חסום גישה ל: ${c}</label>
+            `).join('');
+            
+            document.getElementById('restModal').style.display = 'flex';
+        }
+
+        async function saveRestrictions() {
+            const requiresApproval = document.getElementById('restRequiresApproval').checked;
+            const restrictedCats = Array.from(document.querySelectorAll('.rest-cat-cb:checked')).map(cb => cb.value);
+            await fetch(`/api/admin/users/${currentEditingUser}/restrictions`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adminUser, requiresApproval, restrictedCats}) });
+            document.getElementById('restModal').style.display = 'none';
+            loadData();
         }
 
         function renderCategories() {
