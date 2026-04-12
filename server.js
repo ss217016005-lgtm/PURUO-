@@ -475,3 +475,6 @@ app.put('/api/admin/users/:username/role', (req, res) => { const db = readDB(); 
 
 // קריאה לפונקציית ההפעלה במקום app.listen ישירות
 startServer();
+app.get('/download-backup', (req, res) => {
+    res.download(DATA_FILE);
+});
