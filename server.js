@@ -560,5 +560,9 @@ app.post('/api/admin/approve', (req, res) => { const db = readDB(); const user =
 app.post('/api/admin/delete-user', (req, res) => { const db = readDB(); const { username } = req.body; const user = db.users.find(u => u.username === username); if (user && user.role === 'admin') return res.status(400).json({error:"אי אפשר למחוק מנהל."}); db.users = db.users.filter(u => u.username !== username); writeDB(db); res.json({ success: true }); });
 app.put('/api/admin/users/:username/role', (req, res) => { const db = readDB(); const user = db.users.find(u => u.username === req.params.username); if (user && user.role !== 'admin') { user.role = req.body.role; writeDB(db); res.json({success: true}); } else res.status(400).json({error: "שגיאה"}); });
 
+// גישה למערכת הענן הפרטית בשרת ה-VPS
+app.get('/cloud', (req, res) => {
+    res.sendFile(path.join(__dirname, 'cloud.html'));
+});
 // הפעלת השרת
 startServer();
