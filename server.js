@@ -42,25 +42,21 @@ let pendingSave = false;
 app.use(express.json()); app.use(express.static(__dirname)); app.use('/uploads', express.static(UPLOADS_DIR));
 app.set('trust proxy', true);
 
-// פונקציית ההפעלה שכוללת העברת נתונים אוטומטית (מיגרציה)
 async function startServer() {
     try {
         console.log("מתחבר ל-MongoDB...");
         await mongoose.connect(MONGODB_URI);
         console.log('✅ מחובר למסד הנתונים בענן');
 
-        // בדיקה: האם קיים קובץ ישן על השרת שצריך להעביר לענן?
+        // העברת נתונים אוטומטית אם קיים קובץ ישן
         if (fs.existsSync(DATA_FILE)) {
             console.log("⚠️ נמצא קובץ נתונים ישן (db.json)! מתחיל העברה אוטומטית לענן...");
             try {
                 const rawData = fs.readFileSync(DATA_FILE, 'utf8');
                 const oldData = JSON.parse(rawData);
-                
-                await DBModel.deleteMany({}); // מחיקת הנתונים הריקים מהענן
+                await DBModel.deleteMany({});
                 const newDoc = new DBModel(oldData);
-                await newDoc.save(); // שמירת כל החומר הישן בענן
-                
-                // שינוי שם הקובץ כדי שלא נדרוס את הענן שוב בהפעלה הבאה
+                await newDoc.save();
                 fs.renameSync(DATA_FILE, DATA_FILE + '.backup');
                 console.log("✅ הנתונים הועברו בהצלחה לענן והקובץ הישן גובה!");
             } catch (migErr) {
@@ -68,7 +64,6 @@ async function startServer() {
             }
         }
 
-        // טעינת הנתונים מ-MongoDB (עכשיו הם אמורים להיות שם)
         let doc = await DBModel.findOne();
         if (!doc) {
             console.log("יוצר מסד נתונים חדש בענן...");
@@ -95,6 +90,7 @@ async function startServer() {
                 if (!user.joinDate || user.joinDate === "משתמש ותיק") { user.joinDate = getILTime().split(',')[0]; needsSave = true; }
                 if (!user.notifications) { user.notifications = []; needsSave = true; }
                 if (user.totalLikes === undefined) { user.totalLikes = 0; needsSave = true; }
+                if (user.postCount === undefined) { user.postCount = 0; needsSave = true; }
                 if (user.veteranProgress === undefined) { user.veteranProgress = 0; needsSave = true; }
                 if (user.lastActive === undefined) { user.lastActive = user.lastSeen || Date.now(); needsSave = true; }
                 if (user.avatar === undefined) { user.avatar = ''; needsSave = true; }
@@ -105,6 +101,20 @@ async function startServer() {
             });
         }
         
+        // חישוב מחדש של מונה ההודעות למקרה של עדכון
+        if(dbCache.users && dbCache.posts) {
+            dbCache.users.forEach(u => u.postCount = 0);
+            dbCache.posts.forEach(p => {
+                const u = dbCache.users.find(x => x.username === p.author);
+                if (u && p.isApproved) u.postCount++;
+                p.replies.forEach(r => {
+                    const ru = dbCache.users.find(x => x.username === r.author);
+                    if (ru && r.isApproved) ru.postCount++;
+                });
+            });
+            needsSave = true;
+        }
+
         if (dbCache.messages) { dbCache.messages.forEach(m => { if (!m.likes) { m.likes = []; needsSave = true; } if (!m.fileUrls) { m.fileUrls = []; needsSave = true; } if (!m.subject) { m.subject = 'שיחה כללית'; needsSave = true; } }); }
         if (dbCache.posts) { dbCache.posts.forEach(post => { 
             if (!post.followers) { post.followers = [post.author]; needsSave = true; } 
@@ -165,14 +175,39 @@ const upload = multer({ storage });
 
 function isVeteran(user) { return (user.role === 'admin' || user.role === 'mod' || user.role === 'editor' || user.veteranProgress >= 10); }
 
+// התראות חכמות מונעות חפירה
 function notifyMentionsAndQuotes(content, author, postTitle, threadId, replyId, db) {
     db.users.forEach(u => {
-        if (u.username !== author && content.includes('@' + u.username)) { u.notifications.push({ text: `תויגת על ידי ${author} באשכול: "${postTitle}"`, threadId, replyId, isNew: true }); }
+        if (u.username !== author && content.includes('@' + u.username)) { 
+            const exist = u.notifications.find(n => n.threadId === threadId && n.isNew);
+            if (exist) { exist.text = `ישנן מספר התראות ותיוגים חדשים באשכול: "${postTitle}"`; }
+            else { u.notifications.push({ text: `תויגת על ידי ${author} באשכול: "${postTitle}"`, threadId, replyId, isNew: true }); }
+        }
     });
     const quotes = [...new Set((content.match(/\[quote="(.*?)"\]/gi) || []).map(m => m.match(/\[quote="(.*?)"\]/i)[1]))];
     quotes.forEach(username => {
         const u = db.users.find(x => x.username === username);
-        if (u && u.username !== author) u.notifications.push({ text: `${author} ציטט אותך באשכול: "${postTitle}"`, threadId, replyId, isNew: true });
+        if (u && u.username !== author) {
+            const exist = u.notifications.find(n => n.threadId === threadId && n.isNew);
+            if (exist) { exist.text = `ישנן מספר התראות וציטוטים חדשים באשכול: "${postTitle}"`; }
+            else { u.notifications.push({ text: `${author} ציטט אותך באשכול: "${postTitle}"`, threadId, replyId, isNew: true }); }
+        }
+    });
+}
+
+function notifyFollowers(post, replyAuthor, replyId, db) {
+    post.followers.forEach(follower => { 
+        if (follower !== replyAuthor) { 
+            const fu = db.users.find(u => u.username === follower); 
+            if (fu) {
+                const exist = fu.notifications.find(n => n.threadId === post.id && n.isNew);
+                if (exist) {
+                    exist.text = `ישנן מספר תגובות חדשות באשכול: "${post.title}"`;
+                } else {
+                    fu.notifications.push({ text: `תגובה חדשה מ-${replyAuthor} באשכול: "${post.title}"`, threadId: post.id, replyId: replyId, isNew: true }); 
+                }
+            } 
+        } 
     });
 }
 
@@ -180,7 +215,6 @@ app.use('/api', (req, res, next) => {
     if (!dbCache) return res.status(503).json({ error: "השרת עדיין טוען נתונים, נסה שוב בעוד רגע." });
     next();
 });
-
 
 app.get('/api/settings', (req, res) => res.json(readDB().settings));
 app.put('/api/admin/settings', (req, res) => {
@@ -203,7 +237,7 @@ app.post('/api/register', (req, res) => {
         isApproved: false, requiresApproval: false, restrictedCats: [],
         role: db.users.length === 0 ? 'admin' : 'user', 
         joinDate: getILTime().split(',')[0], lastSeen: Date.now(), lastActive: Date.now(), 
-        notifications: [], totalLikes: 0, veteranProgress: 0, typingTo: null, typingExpires: 0 
+        notifications: [], totalLikes: 0, postCount: 0, veteranProgress: 0, typingTo: null, typingExpires: 0 
     });
     writeDB(db); 
     res.json({ message: "נרשמת בהצלחה! חשבונך ממתין כעת לאישור מנהל." });
@@ -239,7 +273,7 @@ app.put('/api/user/profile', upload.single('avatarFile'), (req, res) => {
     res.json({success: true, message: req.file ? "הפרופיל עודכן. תמונת הפרופיל ממתינה לאישור מנהל לפני שתוצג." : "הפרופיל עודכן בהצלחה."});
 });
 
-app.get('/api/users/info', (req, res) => { const db = readDB(); const info = {}; db.users.forEach(u => { info[u.username] = { role: u.role || 'user', joinDate: u.joinDate || '', totalLikes: u.totalLikes || 0, isVeteran: isVeteran(u), lastSeen: u.lastSeen, avatar: u.avatar, signature: u.signature }; }); res.json(info); });
+app.get('/api/users/info', (req, res) => { const db = readDB(); const info = {}; db.users.forEach(u => { info[u.username] = { role: u.role || 'user', joinDate: u.joinDate || '', totalLikes: u.totalLikes || 0, postCount: u.postCount || 0, isVeteran: isVeteran(u), lastSeen: u.lastSeen, avatar: u.avatar, signature: u.signature }; }); res.json(info); });
 app.post('/api/ping', (req, res) => { const { username, typingTo, currentActivity } = req.body; const db = readDB(); let unreadCount = 0, unreadMessages = 0, allNotifs = []; if (username) { const user = db.users.find(u => u.username === username); if (user) { user.ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress; user.currentActivity = currentActivity || 'גולש בפורום הראשי'; const now = Date.now(); if (now - user.lastActive > 432000000) user.veteranProgress = 0; user.lastSeen = now; user.lastActive = now; if (typingTo !== undefined) { user.typingTo = typingTo; user.typingExpires = now + 4000; } unreadCount = user.notifications ? user.notifications.filter(n => n.isNew !== false).length : 0; allNotifs = user.notifications || []; unreadMessages = db.messages.filter(m => m.to === username && !m.read).length; } writeDB(db); } const threeMinsAgo = Date.now() - 180000; const onlineUsers = db.users.filter(u => u.lastSeen > threeMinsAgo).map(u => u.username); const typingUsers = db.users.filter(u => u.typingTo === username && u.typingExpires > Date.now()).map(u => u.username); res.json({ onlineUsers, unreadCount, unreadMessages, typingUsers, allNotifs }); });
 app.post('/api/notifications/mark-read', (req, res) => { const { username } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); if (user && user.notifications) { user.notifications.forEach(n => n.isNew = false); writeDB(db); } res.json({ success: true }); });
 app.post('/api/notifications/clear', (req, res) => { const { username } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); if (user) { user.notifications = []; writeDB(db); } res.json({ success: true }); });
@@ -289,7 +323,11 @@ app.post('/api/posts', upload.array('attachedFiles', 5), (req, res) => {
     const fileUrls = req.files ? req.files.map(f => `/uploads/${f.filename}`) : []; 
     const newPost = { id: Date.now(), lastUpdated: Date.now(), views: 0, author, title, category, tag: tag || null, content, date: getILTime(), fileUrls, poll, likes: [], dislikes: [], replies: [], followers: [author], isLocked: false, isHidden: false, isApproved: isAppr, isArchived: false }; 
     db.posts.push(newPost); 
-    if(isAppr) notifyMentionsAndQuotes(content, author, title, newPost.id, null, db); 
+    
+    if(isAppr) {
+        user.postCount = (user.postCount || 0) + 1;
+        notifyMentionsAndQuotes(content, author, title, newPost.id, null, db); 
+    }
     writeDB(db); res.status(201).json(newPost); 
 });
 
@@ -319,8 +357,9 @@ app.post('/api/posts/:id/reply', upload.array('attachedFiles', 5), (req, res) =>
     if (post.isArchived) { post.isArchived = false; db.auditLogs.push({ id: Date.now(), date: getILTime(), editor: 'מערכת', action: 'החזרה לראשי', details: `האשכול "${post.title}" חזר אוטומטית עקב תגובה.` }); }
     
     if(isAppr) {
+        user.postCount = (user.postCount || 0) + 1;
         post.lastUpdated = Date.now(); 
-        post.followers.forEach(follower => { if (follower !== author) { const fu = db.users.find(u => u.username === follower); if (fu) fu.notifications.push({ text: `תגובה חדשה מ-${author} באשכול: "${post.title}"`, threadId: post.id, replyId: newReply.id, isNew: true }); } }); 
+        notifyFollowers(post, author, newReply.id, db);
         notifyMentionsAndQuotes(content, author, post.title, post.id, newReply.id, db); 
     }
     writeDB(db); res.status(201).json(newReply); 
@@ -342,19 +381,48 @@ app.post('/api/posts/delete-reply', (req, res) => {
     const { username, postId, replyId } = req.body; 
     const db = readDB(); 
     const user = db.users.find(u => u.username === username); 
-    
-    if (!user || user.role !== 'admin') return res.status(403).json({ error: "רק מנהל יכול למחוק." }); 
-    
     const post = db.posts.find(p => p.id === postId); 
+    
     if (post) { 
         const replyIndex = post.replies.findIndex(r => r.id === replyId);
         if (replyIndex !== -1) {
             const reply = post.replies[replyIndex];
+            if (user.role !== 'admin' && reply.author !== username) return res.status(403).json({ error: "אין הרשאה למחוק תגובה זו." });
+            
+            const authorUser = db.users.find(u => u.username === reply.author);
+            if(authorUser && authorUser.postCount > 0) authorUser.postCount--;
+            
             db.auditLogs.push({ id: Date.now(), date: getILTime(), editor: username, action: 'מחיקת תגובה', details: `תגובה של ${reply.author} באשכול "${post.title}" נמחקה.` });
             post.replies.splice(replyIndex, 1);
             writeDB(db);
             return res.json({ success: true });
         }
+    } 
+    res.status(404).json({ error: "לא נמצא." }); 
+});
+
+app.post('/api/posts/delete-main', (req, res) => { 
+    const { username, postId } = req.body; 
+    const db = readDB(); 
+    const user = db.users.find(u => u.username === username); 
+    const postIndex = db.posts.findIndex(p => p.id === postId); 
+    
+    if (postIndex !== -1) { 
+        const post = db.posts[postIndex];
+        if (user.role !== 'admin' && post.author !== username) return res.status(403).json({ error: "אין הרשאה למחוק אשכול זה." });
+        
+        const authorUser = db.users.find(u => u.username === post.author);
+        if(authorUser && authorUser.postCount > 0) authorUser.postCount--;
+        
+        post.replies.forEach(r => {
+            const ru = db.users.find(u => u.username === r.author);
+            if(ru && ru.postCount > 0) ru.postCount--;
+        });
+
+        db.auditLogs.push({ id: Date.now(), date: getILTime(), editor: username, action: 'מחיקת אשכול שלם', details: `האשכול "${post.title}" נמחק.` });
+        db.posts.splice(postIndex, 1);
+        writeDB(db);
+        return res.json({ success: true });
     } 
     res.status(404).json({ error: "לא נמצא." }); 
 });
@@ -444,7 +512,7 @@ app.get('/api/admin/pending-avatars', (req, res) => { const db = readDB(); res.j
 app.post('/api/admin/approve-avatar', (req, res) => { const { adminUser, targetUser, approve } = req.body; const db = readDB(); const admin = db.users.find(u => u.username === adminUser); if (!admin || (admin.role !== 'admin' && admin.role !== 'mod')) return res.status(403).json({error: "אין הרשאה"}); const target = db.users.find(u => u.username === targetUser); if(target && target.pendingAvatar) { if(approve) target.avatar = target.pendingAvatar; target.pendingAvatar = null; writeDB(db); res.json({success: true}); } else res.status(404).json({error: "לא נמצא"}); });
 
 app.get('/api/admin/pending-content', (req, res) => { const db = readDB(); const pending = []; db.posts.forEach(p => { if(!p.isApproved) pending.push({ type: 'post', postId: p.id, author: p.author, date: p.date, title: p.title, content: p.content }); p.replies.forEach(r => { if(!r.isApproved) pending.push({ type: 'reply', postId: p.id, replyId: r.id, author: r.author, date: r.date, title: `תגובה ב: ${p.title}`, content: r.content }); }); }); res.json(pending); });
-app.post('/api/admin/approve-content', (req, res) => { const { username, type, postId, replyId } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); if (!user || (user.role !== 'admin' && user.role !== 'mod')) return res.status(403).json({error: "אין הרשאה"}); const post = db.posts.find(p => p.id === postId); if(post) { if(type === 'post') { post.isApproved = true; post.lastUpdated = Date.now(); notifyMentionsAndQuotes(post.content, post.author, post.title, post.id, null, db); } if(type === 'reply') { const reply = post.replies.find(r => r.id === replyId); if(reply) { reply.isApproved = true; post.lastUpdated = Date.now(); post.followers.forEach(follower => { if (follower !== reply.author) { const fu = db.users.find(u => u.username === follower); if (fu) fu.notifications.push({ text: `תגובה חדשה מ-${reply.author} באשכול: "${post.title}"`, threadId: post.id, replyId: reply.id, isNew: true }); } }); notifyMentionsAndQuotes(reply.content, reply.author, post.title, post.id, reply.id, db); } } writeDB(db); res.json({success: true}); } else res.status(404).json({error: "לא נמצא"}); });
+app.post('/api/admin/approve-content', (req, res) => { const { username, type, postId, replyId } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); if (!user || (user.role !== 'admin' && user.role !== 'mod')) return res.status(403).json({error: "אין הרשאה"}); const post = db.posts.find(p => p.id === postId); if(post) { if(type === 'post') { post.isApproved = true; post.lastUpdated = Date.now(); user.postCount = (user.postCount || 0) + 1; notifyMentionsAndQuotes(post.content, post.author, post.title, post.id, null, db); } if(type === 'reply') { const reply = post.replies.find(r => r.id === replyId); if(reply) { reply.isApproved = true; post.lastUpdated = Date.now(); const ru = db.users.find(u => u.username === reply.author); if(ru) ru.postCount = (ru.postCount || 0) + 1; notifyFollowers(post, reply.author, reply.id, db); notifyMentionsAndQuotes(reply.content, reply.author, post.title, post.id, reply.id, db); } } writeDB(db); res.json({success: true}); } else res.status(404).json({error: "לא נמצא"}); });
 app.put('/api/admin/users/:username/restrictions', (req, res) => { const { adminUser, requiresApproval, restrictedCats } = req.body; const db = readDB(); const admin = db.users.find(u => u.username === adminUser); if (!admin || admin.role !== 'admin') return res.status(403).json({error: "אין הרשאה"}); const target = db.users.find(u => u.username === req.params.username); if(target) { target.requiresApproval = requiresApproval; target.restrictedCats = restrictedCats; writeDB(db); res.json({success: true}); } else res.status(404).json({error: "לא נמצא"}); });
 
 app.put('/api/admin/users/:username/rename', (req, res) => {
