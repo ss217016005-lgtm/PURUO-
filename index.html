@@ -50,7 +50,6 @@
         .quote-box{background:#e0f2fe;border-right:4px solid #0284c7;padding:12px;margin:5px 0;border-radius:8px 0 0 8px;color:#0c4a6e;font-style:italic;position:relative}
         .quote-box::before{content:"❝";font-size:24px;position:absolute;left:10px;top:5px;color:#7dd3fc;opacity:0.5}
         
-        /* עיצוב כפתור ספוילר */
         .spoiler{margin:10px 0;}
         .spoiler summary{display:inline-block; background:#3b82f6; color:white; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:13px; list-style:none;}
         .spoiler summary::-webkit-details-marker {display:none;}
@@ -83,7 +82,6 @@
         .user-avatar-large { width:60px; height:60px; border-radius:50%; object-fit:cover; margin-bottom:5px; border:2px solid var(--border); }
         .user-signature { border-top:1px dashed #ccc; padding-top:10px; margin-top:15px; font-size:13px; color:#6b7280; font-style:italic; }
         
-        /* כפתור חזור צף */
         #floatingBackBtn { position: fixed; bottom: 30px; right: 30px; background: #4b5563; color: white; padding: 12px 20px; border-radius: 50px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 1000; font-size: 16px; border: 2px solid white; display: none; }
         #floatingBackBtn:hover { background: #374151; transform: translateY(-2px); }
     </style>
@@ -294,7 +292,7 @@
         function showConfirm(txt, cb) { confirmActionCb = cb; document.getElementById('sysModalTitle').innerText='אישור'; document.getElementById('sysModalText').innerText=txt; document.getElementById('sysModalBtns').innerHTML=`<button onclick="closeModal(); confirmActionCb();" style="background:#EF4444; margin-left:10px;">כן</button><button onclick="closeModal()" style="background:#6B7280;">ביטול</button>`; document.getElementById('sysModal').classList.remove('hidden'); }
 
         function playBeep() { 
-            if(localStorage.getItem('muteSound') === 'true') return; // בדיקת השתקה
+            if(localStorage.getItem('muteSound') === 'true') return; 
             try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(880, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.1, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3); } catch(e) {} 
         }
         
@@ -357,7 +355,7 @@
             isSplitMode = false;
             const splitArea = document.getElementById('splitActionArea'); if (splitArea) splitArea.classList.add('hidden');
             document.querySelectorAll('.split-cb').forEach(el => el.classList.add('hidden'));
-            document.getElementById('floatingBackBtn').style.display = 'none'; // העלמת כפתור צף
+            document.getElementById('floatingBackBtn').style.display = 'none';
         }
         
         window.onload = () => { const savedUser = localStorage.getItem('forumUser') || sessionStorage.getItem('forumUser'); if (savedUser) { currentUser = savedUser; enterForum(); } };
@@ -460,7 +458,7 @@
 
             if(newPassword && !oldPassword) return alert("יש להזין סיסמה ישנה כדי לשנות לחדשה.");
 
-            localStorage.setItem('muteSound', muteSound); // שמירת הגדרת השתקה
+            localStorage.setItem('muteSound', muteSound); 
 
             const fd = new FormData();
             fd.append('username', currentUser);
@@ -479,6 +477,7 @@
             await initForum();
         };
 
+        // תיקון: גלילה לראש העמוד בחזרה לאשכולות
         window.backToThreads = async function() { 
             try {
                 history.pushState({}, '', window.location.pathname); 
@@ -487,6 +486,7 @@
                 document.getElementById('searchContainer').classList.remove('hidden');
                 document.getElementById('threadsView').classList.remove('hidden');
                 await loadPosts(); 
+                window.scrollTo({ top: 0, behavior: 'smooth' }); // קפיצה חלקה למעלה
             } catch (err) {
                 console.error(err);
                 window.location.href = '/'; 
@@ -538,12 +538,10 @@
             }
         }
 
-        // שינוי 7א: תצוגת משתמשים מסודרת לפי כמות לייקים (מובילים למעלה)
         window.showMembersList = function() {
             let html = `<div style="max-height:400px; overflow-y:auto;"><table style="width:100%; border-collapse:collapse; text-align:right; font-size:14px;">`;
             html += `<tr style="background:#f3f4f6;"><th>שם משתמש</th><th>תפקיד / סטטוס</th><th>הודעות</th><th>לייקים</th></tr>`;
             
-            // המרת האובייקט למערך ומיון לפי לייקים בסדר יורד
             const sortedUsers = Object.entries(usersInfo).sort((a, b) => b[1].totalLikes - a[1].totalLikes);
             
             for (const [u, d] of sortedUsers) {
@@ -849,15 +847,13 @@
             else { const currentOpenId = parseInt(document.getElementById('singleThreadView').getAttribute('data-current-id')); if(currentOpenId) openThread(currentOpenId, true); else renderThreads(); }
         }
 
-        // שינוי 8א: ציטוט מילים ספציפיות אם סומנו בעכבר
         window.handleQuote = function(postId, replyId) {
             const p = postsData.find(x => x.id === postId);
             const target = replyId ? p.replies.find(r => r.id === replyId) : p;
             if(!target) return;
             
-            // בדיקה אם סומן טקסט בעכבר
             let selectedText = window.getSelection().toString().trim();
-            let clean = selectedText ? selectedText : target.content; // אם סימן טקסט נשתמש בו, אחרת נצטט הכל
+            let clean = selectedText ? selectedText : target.content; 
             
             while(clean.match(/\[quote="(.*?)"\]([\s\S]*?)\[\/quote\]/gi)) {
                 clean = clean.replace(/\[quote="(.*?)"\]([\s\S]*?)\[\/quote\]/gi, '');
@@ -932,7 +928,7 @@
             const isVet = usersInfo[currentUser] && (usersInfo[currentUser].isVeteran || currentUserRole === 'admin' || currentUserRole === 'mod' || currentUserRole === 'editor');
             if (!isVet) filtered = filtered.filter(p => p.category !== 'אקטואליה');
             
-            filtered.sort((a, b) => (b.views || 0) - (a.views || 0)); // Sort by views
+            filtered.sort((a, b) => (b.views || 0) - (a.views || 0)); 
             document.getElementById('threadsList').innerHTML = filtered.length > 0 ? filtered.map(generateThreadCard).join('') : '<div style="padding: 20px; text-align: center; color: #666;">אין אשכולות פופולריים עדיין.</div>';
         }
 
@@ -1074,7 +1070,6 @@
             const hideBtn = canMod ? `<button class="btn-action" style="color:#d97706;" onclick="toggleHidePost(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">👁️ ${p.isHidden ? 'בטל הסתרה' : 'הסתר'}</button>` : '';
             const archiveBtn = (isMain && canMod) ? `<button class="btn-action" style="color:#8b5cf6;" onclick="toggleArchive(${p.id})">📉 ${p.isArchived ? 'החזר לראשי' : 'סמן כפחות רלוונטי'}</button>` : '';
             
-            // שינוי 7 (ב) - מאפשר מחיקה גם אם אתה מנהל וגם אם אתה יוצר ההודעה!
             const canDelete = currentUserRole === 'admin' || p.author === currentUser;
             const deleteBtn = (!isMain && canDelete) ? `<button class="btn-action" style="color:red;" onclick="deleteReply(${parentPost.id}, ${p.id})">🗑️ מחק תגובה</button>` : 
                               (isMain && canDelete) ? `<button class="btn-action" style="color:red;" onclick="deleteMainPost(${p.id})">🗑️ מחק אשכול</button>` : '';
@@ -1091,7 +1086,6 @@
 
             const unapprovedMark = !p.isApproved ? `<div style="background:#fef08a; padding:5px; text-align:center; font-weight:bold; color:#b45309; border-bottom:1px solid #fde047;">⏳ הודעה זו ממתינה לאישור הנהלה</div>` : '';
 
-            // שינוי 9: שינוי הטקסט של כפתור בוז
             const canDislike = usersInfo[currentUser] && (usersInfo[currentUser].totalLikes >= 50 || canMod);
             const dislikeBtn = canDislike ? `<button class="btn-action ${hasDisliked ? 'disliked' : ''}" onclick="toggleDislike(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">👎 נראה לי לא נכון (${dislikesCount})</button>` : '';
             const adminCancelDislikeBtn = (currentUserRole === 'admin' && dislikesCount > 0) ? `<button class="btn-action" style="color:red;" onclick="adminCancelDislikes(${isMain ? p.id : parentPost.id}, ${isMain ? 'null' : p.id})">🛡️ אפס בוז</button>` : '';
@@ -1145,7 +1139,6 @@
             hideAllViews(); document.getElementById('searchContainer').classList.add('hidden');
             document.getElementById('singleThreadView').classList.remove('hidden'); document.getElementById('singleThreadView').setAttribute('data-current-id', id);
             
-            // הצגת כפתור החזור הצף
             document.getElementById('floatingBackBtn').style.display = 'block';
 
             if (currentUserRole === 'admin' || currentUserRole === 'mod') { document.getElementById('splitModeBtn').classList.remove('hidden'); }
@@ -1178,6 +1171,10 @@
                     </div>
                 </div>`;
             document.getElementById('threadContentArea').innerHTML = html;
+
+            setTimeout(() => {
+                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            }, 100);
         }
 
         async function addReply(postId) {
@@ -1222,7 +1219,6 @@
         function triggerContactUs() { showInputMsg("במה נוכל לעזור? הפנייה תגיע לצוות הניהול:", 'submitContactUs'); }
         window.submitContactUs = async function(text) { if(!text) return; await fetch('/api/report', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({reporter: currentUser, postId: null, replyId: null, reason: "פניית צור קשר: " + text}) }); showMsg("נשלח", "פנייתך התקבלה."); }
 
-        // שינוי 5: סרגל כלים בעריכה
         function triggerEdit(postId, replyId) { 
             currentActionPostId = postId; currentActionReplyId = replyId; 
             const p = postsData.find(x => x.id === postId); const target = replyId ? p.replies.find(r => r.id === replyId) : p;
