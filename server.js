@@ -17,7 +17,7 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 const getILTime = () => new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
 
 // כאן תוסיף בחזרה את הקטגוריות החסרות שנטפרי מצנזר
-const newCategoriesList = ["תמונות והסרטות", ''הלכה למעשה'', ''תורת רבותינו'', ''בית המדרש'', ''השקפה'', ''מחשבים וטכנולגיה'', ''זיכרון להולכים'', ''סלבודקא'', "עזרה הדדית", "קורות דורות", "אקטואליה", "הפורום שלנו", "חדשות בציבור"];
+const newCategoriesList = ["תמונות והסרטות", "הלכה למעשה", "תורת רבותינו", "בית המדרש", "השקפה", "מחשבים וטכנולגיה", "זיכרון להולכים", "סלבודקא", "עזרה הדדית", "קורות דורות", "אקטואליה", "הפורום שלנו", "חדשות בציבור"];
 const defaultTags = [{ name: 'שיתוף', color: '#3b82f6' }, { name: 'באג', color: '#ef4444' }, { name: 'שאלה', color: '#f59e0b' }, { name: 'להורדה', color: '#10b981' }];
 
 const defaultDB = { 
