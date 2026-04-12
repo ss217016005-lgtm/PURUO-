@@ -2,21 +2,20 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const mongoose = require('mongoose'); // הספרייה החדשה של מסד הנתונים
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// שמירת קבצים שהועלו לכונן (יישמר בווליום שעשית ב-Railway)
 const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.PORT;
 const DATA_DIR = isRailway ? '/app/data' : path.join(__dirname, 'data');
-const DATA_FILE = path.join(DATA_DIR, 'db.json');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
-
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const getILTime = () => new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
 
-// כאן תוסיף בחזרה את הקטגוריות החסרות שנטפרי מצנזר
 const newCategoriesList = ["תמונות והסרטות", "הלכה למעשה", "תורת רבותינו", "בית המדרש", "השקפה", "מחשבים וטכנולגיה", "זיכרון להולכים", "סלבודקא", "עזרה הדדית", "קורות דורות", "אקטואליה", "הפורום שלנו", "חדשות בציבור"];
 const defaultTags = [{ name: 'שיתוף', color: '#3b82f6' }, { name: 'באג', color: '#ef4444' }, { name: 'שאלה', color: '#f59e0b' }, { name: 'להורדה', color: '#10b981' }];
 
@@ -25,68 +24,126 @@ const defaultDB = {
     settings: { rules: "ברוכים הבאים לפורום פרומרקייט!\n\n1. יש לשמור על שפה נקייה ומכבדת.", floatingMessage: { text: "", color: "#f59e0b", id: 0 } }
 };
 
+// ==========================================
+// הגדרות MongoDB - מנגנון שמירה חכם ומהיר
+// ==========================================
+const MONGODB_URI = "mongodb+srv://w217016005_db_user:771fEhHF0z26gIGl@cluster0.e7lsmeb.mongodb.net/ForumDB?retryWrites=true&w=majority";
+
+mongoose.connect(MONGODB_URI)
+    .then(() => console.log('✅ השרת חובר למסד הנתונים בענן (MongoDB) בהצלחה!'))
+    .catch(err => console.error('❌ שגיאה בחיבור למסד הנתונים:', err));
+
+const dbSchema = new mongoose.Schema({
+    users: Array, categories: Array, tags: Array, posts: Array,
+    reports: Array, messages: Array, auditLogs: Array, links: Array, settings: Object
+}, { strict: false });
+
+const DBModel = mongoose.model('Database', dbSchema);
+
 let dbCache = null;
+let dbDocId = null;
+let isSaving = false;
+let pendingSave = false;
 
-function initDB() {
-    if (!fs.existsSync(DATA_FILE)) { dbCache = defaultDB; fs.writeFileSync(DATA_FILE, JSON.stringify(dbCache, null, 2)); return; }
-    dbCache = JSON.parse(fs.readFileSync(DATA_FILE));
-    let needsSave = false;
-
-    if (!dbCache.reports) { dbCache.reports = []; needsSave = true; }
-    if (!dbCache.messages) { dbCache.messages = []; needsSave = true; }
-    if (!dbCache.auditLogs) { dbCache.auditLogs = []; needsSave = true; }
-    if (!dbCache.categories) { dbCache.categories = newCategoriesList; needsSave = true; }
-    if (!dbCache.tags) { dbCache.tags = defaultTags; needsSave = true; }
-    if (!dbCache.settings) { dbCache.settings = defaultDB.settings; needsSave = true; }
-    if (!dbCache.links) { dbCache.links = []; needsSave = true; }
-    if (!dbCache.settings.floatingMessage.color) { dbCache.settings.floatingMessage.color = "#f59e0b"; needsSave = true; }
-    
-    if (dbCache.users) {
-        dbCache.users.forEach(user => {
-            if (!user.role) { user.role = user.isAdmin ? 'admin' : 'user'; needsSave = true; }
-            if (!user.joinDate || user.joinDate === "משתמש ותיק") { user.joinDate = getILTime().split(',')[0]; needsSave = true; }
-            if (!user.notifications) { user.notifications = []; needsSave = true; }
-            if (user.totalLikes === undefined) { user.totalLikes = 0; needsSave = true; }
-            if (user.veteranProgress === undefined) { user.veteranProgress = 0; needsSave = true; }
-            if (user.lastActive === undefined) { user.lastActive = user.lastSeen || Date.now(); needsSave = true; }
-            if (user.avatar === undefined) { user.avatar = ''; needsSave = true; }
-            if (user.pendingAvatar === undefined) { user.pendingAvatar = null; needsSave = true; }
-            if (user.signature === undefined) { user.signature = ''; needsSave = true; }
-            if (user.requiresApproval === undefined) { user.requiresApproval = false; needsSave = true; }
-            if (user.restrictedCats === undefined) { user.restrictedCats = []; needsSave = true; }
-        });
-    }
-    
-    if (dbCache.messages) { dbCache.messages.forEach(m => { if (!m.likes) { m.likes = []; needsSave = true; } if (!m.fileUrls) { m.fileUrls = []; needsSave = true; } if (!m.subject) { m.subject = 'שיחה כללית'; needsSave = true; } }); }
-    if (dbCache.posts) { dbCache.posts.forEach(post => { 
-        if (!post.followers) { post.followers = [post.author]; needsSave = true; } 
-        if (post.isLocked === undefined) { post.isLocked = false; needsSave = true; } 
-        if (post.isHidden === undefined) { post.isHidden = false; needsSave = true; } 
-        if (post.isApproved === undefined) { post.isApproved = true; needsSave = true; } 
-        if (post.isArchived === undefined) { post.isArchived = false; needsSave = true; }
-        if (!post.lastUpdated) { post.lastUpdated = post.id; needsSave = true; } 
-        if (post.views === undefined) { post.views = 0; needsSave = true; } 
-        if (post.fileUrls === undefined) { post.fileUrls = post.fileUrl ? [post.fileUrl] : []; needsSave = true; } 
+// טעינת מסד הנתונים לזיכרון פעם אחת בהפעלה
+async function initDB() {
+    try {
+        let doc = await DBModel.findOne();
+        if (!doc) {
+            console.log("יוצר מסד נתונים חדש בענן...");
+            doc = new DBModel(defaultDB);
+            await doc.save();
+        }
+        dbCache = doc.toObject();
+        dbDocId = doc._id;
         
-        // אתחול מערך הדיסלייקים
-        if (post.dislikes === undefined) { post.dislikes = []; needsSave = true; }
-
-        post.replies.forEach(r => { 
-            if (r.fileUrls === undefined) { r.fileUrls = r.fileUrl ? [r.fileUrl] : []; needsSave = true; } 
-            if (r.isHidden === undefined) { r.isHidden = false; needsSave = true; }
-            if (r.isApproved === undefined) { r.isApproved = true; needsSave = true; }
-            // אתחול מערך הדיסלייקים לתגובות
-            if (r.dislikes === undefined) { r.dislikes = []; needsSave = true; }
-        }); 
-    }); }
-    
-    if (needsSave) fs.writeFileSync(DATA_FILE, JSON.stringify(dbCache, null, 2));
+        // בדיקת תקינות נתונים (כמו שהיה בקובץ הישן)
+        let needsSave = false;
+        if (!dbCache.reports) { dbCache.reports = []; needsSave = true; }
+        if (!dbCache.messages) { dbCache.messages = []; needsSave = true; }
+        if (!dbCache.auditLogs) { dbCache.auditLogs = []; needsSave = true; }
+        if (!dbCache.categories) { dbCache.categories = newCategoriesList; needsSave = true; }
+        if (!dbCache.tags) { dbCache.tags = defaultTags; needsSave = true; }
+        if (!dbCache.settings) { dbCache.settings = defaultDB.settings; needsSave = true; }
+        if (!dbCache.links) { dbCache.links = []; needsSave = true; }
+        if (!dbCache.settings.floatingMessage.color) { dbCache.settings.floatingMessage.color = "#f59e0b"; needsSave = true; }
+        
+        if (dbCache.users) {
+            dbCache.users.forEach(user => {
+                if (!user.role) { user.role = user.isAdmin ? 'admin' : 'user'; needsSave = true; }
+                if (!user.joinDate || user.joinDate === "משתמש ותיק") { user.joinDate = getILTime().split(',')[0]; needsSave = true; }
+                if (!user.notifications) { user.notifications = []; needsSave = true; }
+                if (user.totalLikes === undefined) { user.totalLikes = 0; needsSave = true; }
+                if (user.veteranProgress === undefined) { user.veteranProgress = 0; needsSave = true; }
+                if (user.lastActive === undefined) { user.lastActive = user.lastSeen || Date.now(); needsSave = true; }
+                if (user.avatar === undefined) { user.avatar = ''; needsSave = true; }
+                if (user.pendingAvatar === undefined) { user.pendingAvatar = null; needsSave = true; }
+                if (user.signature === undefined) { user.signature = ''; needsSave = true; }
+                if (user.requiresApproval === undefined) { user.requiresApproval = false; needsSave = true; }
+                if (user.restrictedCats === undefined) { user.restrictedCats = []; needsSave = true; }
+            });
+        }
+        
+        if (dbCache.messages) { dbCache.messages.forEach(m => { if (!m.likes) { m.likes = []; needsSave = true; } if (!m.fileUrls) { m.fileUrls = []; needsSave = true; } if (!m.subject) { m.subject = 'שיחה כללית'; needsSave = true; } }); }
+        if (dbCache.posts) { dbCache.posts.forEach(post => { 
+            if (!post.followers) { post.followers = [post.author]; needsSave = true; } 
+            if (post.isLocked === undefined) { post.isLocked = false; needsSave = true; } 
+            if (post.isHidden === undefined) { post.isHidden = false; needsSave = true; } 
+            if (post.isApproved === undefined) { post.isApproved = true; needsSave = true; } 
+            if (post.isArchived === undefined) { post.isArchived = false; needsSave = true; }
+            if (!post.lastUpdated) { post.lastUpdated = post.id; needsSave = true; } 
+            if (post.views === undefined) { post.views = 0; needsSave = true; } 
+            if (post.fileUrls === undefined) { post.fileUrls = post.fileUrl ? [post.fileUrl] : []; needsSave = true; } 
+            if (post.dislikes === undefined) { post.dislikes = []; needsSave = true; }
+            post.replies.forEach(r => { 
+                if (r.fileUrls === undefined) { r.fileUrls = r.fileUrl ? [r.fileUrl] : []; needsSave = true; } 
+                if (r.isHidden === undefined) { r.isHidden = false; needsSave = true; }
+                if (r.isApproved === undefined) { r.isApproved = true; needsSave = true; }
+                if (r.dislikes === undefined) { r.dislikes = []; needsSave = true; }
+            }); 
+        }); }
+        
+        if (needsSave) writeDB(dbCache);
+        console.log("🚀 נתונים נטענו לזיכרון! הפורום מוכן לפעולה מהירה.");
+    } catch (e) {
+        console.error("שגיאה קריטית בטעינת הנתונים:", e);
+    }
 }
 
 const readDB = () => dbCache;
-const writeDB = (data) => { dbCache = data; fs.writeFile(DATA_FILE, JSON.stringify(dbCache, null, 2), (err) => { if(err) console.error(err); }); };
 
+// מנגנון שמירה חכם שמונע תקיעות
+const writeDB = (data) => {
+    dbCache = data;
+    if (isSaving) {
+        pendingSave = true; // אם אנחנו כבר שומרים עכשיו, נסמן שיש עוד שמירה בתור
+        return;
+    }
+    saveToMongo();
+};
+
+async function saveToMongo() {
+    if (!dbDocId) return;
+    isSaving = true;
+    try {
+        // שמירה לענן ברקע בלי לחסום את המשתמשים
+        await DBModel.updateOne({ _id: dbDocId }, { $set: dbCache });
+    } catch (e) {
+        console.error("שגיאה בשמירה לענן:", e);
+    }
+    isSaving = false;
+    
+    // אם מישהו הגיב בזמן ששמרנו, נפעיל שוב את השמירה
+    if (pendingSave) {
+        pendingSave = false;
+        saveToMongo();
+    }
+}
+
+// הפעלת חיבור נתונים
 initDB();
+// ==========================================
+
 
 const storage = multer.diskStorage({ destination: (req, file, cb) => cb(null, UPLOADS_DIR), filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname) });
 const upload = multer({ storage });
@@ -300,7 +357,6 @@ app.post('/api/like', (req, res) => {
     writeDB(db); res.json({ success: true }); 
 });
 
-// מערכת דיסלייק
 app.post('/api/dislike', (req, res) => {
     const { username, postId, replyId } = req.body; 
     const db = readDB(); 
@@ -325,7 +381,6 @@ app.post('/api/dislike', (req, res) => {
     res.json({ success: true }); 
 });
 
-// איפוס דיסלייקים מנהל
 app.delete('/api/admin/dislike-reset', (req, res) => {
     const { adminUser, postId, replyId } = req.body;
     const db = readDB();
@@ -373,7 +428,6 @@ app.get('/api/admin/pending-content', (req, res) => { const db = readDB(); const
 app.post('/api/admin/approve-content', (req, res) => { const { username, type, postId, replyId } = req.body; const db = readDB(); const user = db.users.find(u => u.username === username); if (!user || (user.role !== 'admin' && user.role !== 'mod')) return res.status(403).json({error: "אין הרשאה"}); const post = db.posts.find(p => p.id === postId); if(post) { if(type === 'post') { post.isApproved = true; post.lastUpdated = Date.now(); notifyMentionsAndQuotes(post.content, post.author, post.title, post.id, null, db); } if(type === 'reply') { const reply = post.replies.find(r => r.id === replyId); if(reply) { reply.isApproved = true; post.lastUpdated = Date.now(); post.followers.forEach(follower => { if (follower !== reply.author) { const fu = db.users.find(u => u.username === follower); if (fu) fu.notifications.push({ text: `תגובה חדשה מ-${reply.author} באשכול: "${post.title}"`, threadId: post.id, replyId: reply.id, isNew: true }); } }); notifyMentionsAndQuotes(reply.content, reply.author, post.title, post.id, reply.id, db); } } writeDB(db); res.json({success: true}); } else res.status(404).json({error: "לא נמצא"}); });
 app.put('/api/admin/users/:username/restrictions', (req, res) => { const { adminUser, requiresApproval, restrictedCats } = req.body; const db = readDB(); const admin = db.users.find(u => u.username === adminUser); if (!admin || admin.role !== 'admin') return res.status(403).json({error: "אין הרשאה"}); const target = db.users.find(u => u.username === req.params.username); if(target) { target.requiresApproval = requiresApproval; target.restrictedCats = restrictedCats; writeDB(db); res.json({success: true}); } else res.status(404).json({error: "לא נמצא"}); });
 
-// שינוי שם משתמש
 app.put('/api/admin/users/:username/rename', (req, res) => {
     const { adminUser, newUsername } = req.body;
     const oldUsername = req.params.username;
@@ -393,7 +447,6 @@ app.put('/api/admin/users/:username/rename', (req, res) => {
     } else res.status(404).json({ error: "משתמש לא נמצא" });
 });
 
-// הוספת לייקים ע"י מנהל
 app.put('/api/admin/users/:username/likes', (req, res) => {
     const { adminUser, amount } = req.body;
     const db = readDB();
