@@ -228,8 +228,12 @@
                 }
                 
                 const restrictBtn = u.role !== 'admin' ? `<button class="btn-mod" style="background:#e67e22;" onclick="openRestrictions('${u.username.replace(/'/g, "\\'")}', ${u.requiresApproval}, '${JSON.stringify(u.restrictedCats || [])}')">🛑 הגבלות</button>` : '';
+                
+                // כפתורים חדשים לניהול שם ולייקים
+                const customLikesBtn = `<button class="btn-approve" style="background:#10b981;" onclick="addCustomLikes('${u.username.replace(/'/g, "\\'")}')">❤️ הוסף לייקים</button>`;
+                const renameUserBtn = u.role !== 'admin' ? `<button class="btn-mod" style="background:#34495e;" onclick="renameUser('${u.username.replace(/'/g, "\\'")}')">✏️ שנה שם</button>` : '';
 
-                return `<tr><td><strong>${u.username.replace(/</g, "&lt;")}</strong></td><td>${roleStr}</td><td style="font-family:monospace;">${u.ip || 'לא ידוע'}</td><td>${activity}</td><td>${restrictBtn} ${u.role !== 'admin' ? `${promoteBtns} <button class="btn-delete" onclick="deleteUser('${u.username.replace(/'/g, "\\'")}')">מחק</button>` : '<span style="color:gray;">מנהל</span>'}</td></tr>`;
+                return `<tr><td><strong>${u.username.replace(/</g, "&lt;")}</strong></td><td>${roleStr}</td><td style="font-family:monospace;">${u.ip || 'לא ידוע'}</td><td>${activity}</td><td>${restrictBtn} ${customLikesBtn} ${renameUserBtn} ${u.role !== 'admin' ? `${promoteBtns} <button class="btn-delete" onclick="deleteUser('${u.username.replace(/'/g, "\\'")}')">מחק</button>` : '<span style="color:gray; margin-right:10px;">פעולות חסומות</span>'}</td></tr>`;
             }).join('');
 
             const cRes = await fetch('/api/categories'); currentCategories = await cRes.json();
@@ -240,7 +244,7 @@
 
             const rRes = await fetch('/api/admin/reports'); const reports = await rRes.json();
             document.getElementById('reportsTable').innerHTML = reports.length === 0 ? "<tr><td colspan='5' style='text-align:center;'>הכל שקט. אין דיווחים.</td></tr>" :
-                reports.map(r => `<tr><td>${r.date}</td><td><strong>${r.reporter}</strong></td><td style="color: red; font-weight: bold;">${r.reason}</td><td>${r.postId ? `<a class="link-btn" href="/?thread=${r.postId}" target="_blank">🔗 הודעה</a>` : 'פנייה כללית'}</td><td><button class="btn-approve" onclick="resolveReport(${r.id})">סמן כטופל</button></td></tr>`).join('');
+                reports.map(r => `<tr><td>${r.date}</td><td><strong>${r.reporter}</strong></td><td style="color: red; font-weight: bold;">${r.reason}</td><td>${r.postId ? `<a class="link-btn" href="/?thread=${r.postId}" target="_blank">🔗 הודעה</a>` : 'פנייה כללית'}</td><td><button class="btn-mod" style="background:#3b82f6;" onclick="replyToReport('${r.reporter.replace(/'/g, "\\'")}')">✉️ השב למדווח</button> <button class="btn-approve" onclick="resolveReport(${r.id})">סמן כטופל</button></td></tr>`).join('');
 
             const poRes = await fetch('/api/posts'); const posts = await poRes.json();
             document.getElementById('postsTable').innerHTML = posts.length === 0 ? "<tr><td colspan='5' style='text-align:center;'>אין אשכולות.</td></tr>" : 
@@ -252,6 +256,28 @@
 
             const mRes = await fetch('/api/admin/all-messages'); allPmsCache = await mRes.json();
             renderPMs(allPmsCache);
+        }
+
+        window.addCustomLikes = async function(username) {
+            const amount = prompt(`כמה לייקים תרצה להוסיף למשתמש ${username}? (ניתן גם מינוס כדי להוריד)`);
+            if(!amount || isNaN(amount)) return;
+            await fetch(`/api/admin/users/${username}/likes`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adminUser, amount: parseInt(amount)}) });
+            loadData();
+        }
+
+        window.renameUser = async function(oldUsername) {
+            const newUsername = prompt(`הכנס שם משתמש חדש במקום "${oldUsername}":`);
+            if(!newUsername) return;
+            await fetch(`/api/admin/users/${oldUsername}/rename`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adminUser, newUsername}) });
+            loadData();
+        }
+
+        window.replyToReport = async function(reporter) {
+            const text = prompt(`הודעה שתישלח ל-${reporter} בפרטי:`);
+            if(!text) return;
+            const fd = new FormData(); fd.append('from', adminUser); fd.append('to', reporter); fd.append('content', text); fd.append('subject', 'תשובה לדיווח שלך מהנהלת הפורום');
+            await fetch('/api/messages', { method: 'POST', body: fd });
+            alert('ההודעה נשלחה בהצלחה בפרטי!');
         }
 
         async function approveAvatar(targetUser, approve) {
