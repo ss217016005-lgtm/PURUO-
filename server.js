@@ -2,12 +2,11 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const mongoose = require('mongoose'); // הספרייה החדשה של מסד הנתונים
+const mongoose = require('mongoose');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// שמירת קבצים שהועלו לכונן (יישמר בווליום שעשית ב-Railway)
 const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.PORT;
 const DATA_DIR = isRailway ? '/app/data' : path.join(__dirname, 'data');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
@@ -24,14 +23,7 @@ const defaultDB = {
     settings: { rules: "ברוכים הבאים לפורום פרומרקייט!\n\n1. יש לשמור על שפה נקייה ומכבדת.", floatingMessage: { text: "", color: "#f59e0b", id: 0 } }
 };
 
-// ==========================================
-// הגדרות MongoDB - מנגנון שמירה חכם ומהיר
-// ==========================================
 const MONGODB_URI = "mongodb+srv://w217016005_db_user:771fEhHF0z26gIGl@cluster0.e7lsmeb.mongodb.net/ForumDB?retryWrites=true&w=majority";
-
-mongoose.connect(MONGODB_URI)
-    .then(() => console.log('✅ השרת חובר למסד הנתונים בענן (MongoDB) בהצלחה!'))
-    .catch(err => console.error('❌ שגיאה בחיבור למסד הנתונים:', err));
 
 const dbSchema = new mongoose.Schema({
     users: Array, categories: Array, tags: Array, posts: Array,
@@ -45,9 +37,15 @@ let dbDocId = null;
 let isSaving = false;
 let pendingSave = false;
 
-// טעינת מסד הנתונים לזיכרון פעם אחת בהפעלה
-async function initDB() {
+app.use(express.json()); app.use(express.static(__dirname)); app.use('/uploads', express.static(UPLOADS_DIR));
+app.set('trust proxy', true);
+
+async function startServer() {
     try {
+        console.log("מתחבר ל-MongoDB...");
+        await mongoose.connect(MONGODB_URI);
+        console.log('✅ מחובר למסד הנתונים בענן');
+
         let doc = await DBModel.findOne();
         if (!doc) {
             console.log("יוצר מסד נתונים חדש בענן...");
@@ -57,7 +55,6 @@ async function initDB() {
         dbCache = doc.toObject();
         dbDocId = doc._id;
         
-        // בדיקת תקינות נתונים (כמו שהיה בקובץ הישן)
         let needsSave = false;
         if (!dbCache.reports) { dbCache.reports = []; needsSave = true; }
         if (!dbCache.messages) { dbCache.messages = []; needsSave = true; }
@@ -66,6 +63,7 @@ async function initDB() {
         if (!dbCache.tags) { dbCache.tags = defaultTags; needsSave = true; }
         if (!dbCache.settings) { dbCache.settings = defaultDB.settings; needsSave = true; }
         if (!dbCache.links) { dbCache.links = []; needsSave = true; }
+        if (!dbCache.settings.floatingMessage) dbCache.settings.floatingMessage = { text: "", color: "#f59e0b", id: 0 };
         if (!dbCache.settings.floatingMessage.color) { dbCache.settings.floatingMessage.color = "#f59e0b"; needsSave = true; }
         
         if (dbCache.users) {
@@ -104,19 +102,22 @@ async function initDB() {
         }); }
         
         if (needsSave) writeDB(dbCache);
-        console.log("🚀 נתונים נטענו לזיכרון! הפורום מוכן לפעולה מהירה.");
+        console.log("🚀 נתונים נטענו לזיכרון!");
+
+        // רק אחרי שהנתונים נטענו, אנחנו מפעילים את השרת
+        app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
     } catch (e) {
-        console.error("שגיאה קריטית בטעינת הנתונים:", e);
+        console.error("❌ שגיאה קריטית בעליית השרת:", e);
     }
 }
 
 const readDB = () => dbCache;
 
-// מנגנון שמירה חכם שמונע תקיעות
 const writeDB = (data) => {
     dbCache = data;
     if (isSaving) {
-        pendingSave = true; // אם אנחנו כבר שומרים עכשיו, נסמן שיש עוד שמירה בתור
+        pendingSave = true;
         return;
     }
     saveToMongo();
@@ -126,29 +127,19 @@ async function saveToMongo() {
     if (!dbDocId) return;
     isSaving = true;
     try {
-        // שמירה לענן ברקע בלי לחסום את המשתמשים
         await DBModel.updateOne({ _id: dbDocId }, { $set: dbCache });
     } catch (e) {
         console.error("שגיאה בשמירה לענן:", e);
     }
     isSaving = false;
-    
-    // אם מישהו הגיב בזמן ששמרנו, נפעיל שוב את השמירה
     if (pendingSave) {
         pendingSave = false;
         saveToMongo();
     }
 }
 
-// הפעלת חיבור נתונים
-initDB();
-// ==========================================
-
-
 const storage = multer.diskStorage({ destination: (req, file, cb) => cb(null, UPLOADS_DIR), filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname) });
 const upload = multer({ storage });
-app.use(express.json()); app.use(express.static(__dirname)); app.use('/uploads', express.static(UPLOADS_DIR));
-app.set('trust proxy', true);
 
 function isVeteran(user) { return (user.role === 'admin' || user.role === 'mod' || user.role === 'editor' || user.veteranProgress >= 10); }
 
@@ -162,6 +153,15 @@ function notifyMentionsAndQuotes(content, author, postTitle, threadId, replyId, 
         if (u && u.username !== author) u.notifications.push({ text: `${author} ציטט אותך באשכול: "${postTitle}"`, threadId, replyId, isNew: true });
     });
 }
+
+// מחכה שה-dbCache יהיה מוכן לפני כל קריאת API
+app.use('/api', (req, res, next) => {
+    if (!dbCache) {
+        return res.status(503).json({ error: "השרת עדיין טוען נתונים, נסה שוב בעוד רגע." });
+    }
+    next();
+});
+
 
 app.get('/api/settings', (req, res) => res.json(readDB().settings));
 app.put('/api/admin/settings', (req, res) => {
@@ -473,4 +473,5 @@ app.post('/api/admin/approve', (req, res) => { const db = readDB(); const user =
 app.post('/api/admin/delete-user', (req, res) => { const db = readDB(); const { username } = req.body; const user = db.users.find(u => u.username === username); if (user && user.role === 'admin') return res.status(400).json({error:"אי אפשר למחוק מנהל."}); db.users = db.users.filter(u => u.username !== username); writeDB(db); res.json({ success: true }); });
 app.put('/api/admin/users/:username/role', (req, res) => { const db = readDB(); const user = db.users.find(u => u.username === req.params.username); if (user && user.role !== 'admin') { user.role = req.body.role; writeDB(db); res.json({success: true}); } else res.status(400).json({error: "שגיאה"}); });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// קריאה לפונקציית ההפעלה במקום app.listen ישירות
+startServer();
