@@ -9,7 +9,9 @@ const PORT = process.env.PORT || 3000;
 
 const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.PORT;
 const DATA_DIR = isRailway ? '/app/data' : path.join(__dirname, 'data');
+const DATA_FILE = path.join(DATA_DIR, 'db.json');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -40,12 +42,33 @@ let pendingSave = false;
 app.use(express.json()); app.use(express.static(__dirname)); app.use('/uploads', express.static(UPLOADS_DIR));
 app.set('trust proxy', true);
 
+// פונקציית ההפעלה שכוללת העברת נתונים אוטומטית (מיגרציה)
 async function startServer() {
     try {
         console.log("מתחבר ל-MongoDB...");
         await mongoose.connect(MONGODB_URI);
         console.log('✅ מחובר למסד הנתונים בענן');
 
+        // בדיקה: האם קיים קובץ ישן על השרת שצריך להעביר לענן?
+        if (fs.existsSync(DATA_FILE)) {
+            console.log("⚠️ נמצא קובץ נתונים ישן (db.json)! מתחיל העברה אוטומטית לענן...");
+            try {
+                const rawData = fs.readFileSync(DATA_FILE, 'utf8');
+                const oldData = JSON.parse(rawData);
+                
+                await DBModel.deleteMany({}); // מחיקת הנתונים הריקים מהענן
+                const newDoc = new DBModel(oldData);
+                await newDoc.save(); // שמירת כל החומר הישן בענן
+                
+                // שינוי שם הקובץ כדי שלא נדרוס את הענן שוב בהפעלה הבאה
+                fs.renameSync(DATA_FILE, DATA_FILE + '.backup');
+                console.log("✅ הנתונים הועברו בהצלחה לענן והקובץ הישן גובה!");
+            } catch (migErr) {
+                console.error("שגיאה במהלך העברת הנתונים לענן:", migErr);
+            }
+        }
+
+        // טעינת הנתונים מ-MongoDB (עכשיו הם אמורים להיות שם)
         let doc = await DBModel.findOne();
         if (!doc) {
             console.log("יוצר מסד נתונים חדש בענן...");
@@ -104,7 +127,6 @@ async function startServer() {
         if (needsSave) writeDB(dbCache);
         console.log("🚀 נתונים נטענו לזיכרון!");
 
-        // רק אחרי שהנתונים נטענו, אנחנו מפעילים את השרת
         app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
     } catch (e) {
@@ -154,11 +176,8 @@ function notifyMentionsAndQuotes(content, author, postTitle, threadId, replyId, 
     });
 }
 
-// מחכה שה-dbCache יהיה מוכן לפני כל קריאת API
 app.use('/api', (req, res, next) => {
-    if (!dbCache) {
-        return res.status(503).json({ error: "השרת עדיין טוען נתונים, נסה שוב בעוד רגע." });
-    }
+    if (!dbCache) return res.status(503).json({ error: "השרת עדיין טוען נתונים, נסה שוב בעוד רגע." });
     next();
 });
 
@@ -473,8 +492,5 @@ app.post('/api/admin/approve', (req, res) => { const db = readDB(); const user =
 app.post('/api/admin/delete-user', (req, res) => { const db = readDB(); const { username } = req.body; const user = db.users.find(u => u.username === username); if (user && user.role === 'admin') return res.status(400).json({error:"אי אפשר למחוק מנהל."}); db.users = db.users.filter(u => u.username !== username); writeDB(db); res.json({ success: true }); });
 app.put('/api/admin/users/:username/role', (req, res) => { const db = readDB(); const user = db.users.find(u => u.username === req.params.username); if (user && user.role !== 'admin') { user.role = req.body.role; writeDB(db); res.json({success: true}); } else res.status(400).json({error: "שגיאה"}); });
 
-// קריאה לפונקציית ההפעלה במקום app.listen ישירות
+// הפעלת השרת
 startServer();
-app.get('/download-backup', (req, res) => {
-    res.download(DATA_FILE);
-});
