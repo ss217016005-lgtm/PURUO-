@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>הענן הפרטי שלי</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f3f4f6; margin: 0; padding: 20px; color: #1f2937; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #2563eb; }
+        .controls { display: flex; gap: 10px; margin-bottom: 20px; justify-content: space-between; align-items: center; background: #eff6ff; padding: 15px; border-radius: 8px; }
+        select, input[type="file"], button { padding: 10px; border: 1px solid #d1d5db; border-radius: 5px; font-size: 16px; }
+        button { background: #2563eb; color: white; border: none; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #1d4ed8; }
+        .file-list { list-style: none; padding: 0; }
+        .file-item { display: flex; justify-content: space-between; padding: 15px; border-bottom: 1px solid #e5e7eb; align-items: center; }
+        .file-item:last-child { border-bottom: none; }
+        .btn-download { background: #10b981; padding: 5px 15px; text-decoration: none; color: white; border-radius: 5px; font-size: 14px; }
+        .btn-download:hover { background: #059669; }
+        #status { text-align: center; color: #dc2626; font-weight: bold; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>☁️ הענן הפרטי (VPS Storage)</h1>
+    
+    <div class="controls">
+        <div>
+            <label for="category">בחר קטגוריה: </label>
+            <select id="category" onchange="loadFiles()">
+                <option value="documents">מסמכים</option>
+                <option value="images">תמונות</option>
+                <option value="transcripts">תמלולים</option>
+                <option value="others">אחר</option>
+            </select>
+        </div>
+        <div>
+            <input type="file" id="fileInput">
+            <button onclick="uploadFile()">העלה קובץ</button>
+        </div>
+    </div>
+
+    <div id="status"></div>
+
+    <h3>קובצי המערכת:</h3>
+    <ul class="file-list" id="fileList">
+        </ul>
+</div>
+
+<script>
+    // הכתובת של שרת ה-VPS שלך
+    const VPS_URL = "http://161.97.116.66:8000";
+    // חייב להיות תואם לסיסמה ששמת בקוד הפייתון בשרת
+    const API_KEY = "your_secret_password_123"; 
+
+    const headers = { "x-api-key": API_KEY };
+
+    async function loadFiles() {
+        const category = document.getElementById("category").value;
+        const listEl = document.getElementById("fileList");
+        listEl.innerHTML = "טוען קבצים...";
+        
+        try {
+            const response = await fetch(`${VPS_URL}/list/${category}`, { headers });
+            if (!response.ok) throw new Error("שגיאת התחברות לשרת");
+            const data = await response.json();
+            
+            listEl.innerHTML = "";
+            if (!data.files || data.files.length === 0) {
+                listEl.innerHTML = "<li>אין קבצים בקטגוריה זו.</li>";
+                return;
+            }
+
+            data.files.forEach(file => {
+                const li = document.createElement("li");
+                li.className = "file-item";
+                li.innerHTML = `
+                    <span>📄 ${file}</span>
+                    <a href="${VPS_URL}/download/${category}/${file}" class="btn-download" target="_blank" onclick="appendKey(event, this)">הורדה</a>
+                `;
+                listEl.appendChild(li);
+            });
+        } catch (error) {
+            document.getElementById("status").innerText = "❌ שגיאה בטעינת קבצים: " + error.message;
+        }
+    }
+
+    async function uploadFile() {
+        const fileInput = document.getElementById("fileInput");
+        const category = document.getElementById("category").value;
+        const status = document.getElementById("status");
+        
+        if (fileInput.files.length === 0) {
+            status.innerText = "⚠️ אנא בחר קובץ קודם";
+            return;
+        }
+
+        const file = fileInput.files[0];
+        const formData = new FormData();
+        formData.append("file", file);
+
+        status.style.color = "#2563eb";
+        status.innerText = "⏳ מעלה קובץ לשרת...";
+
+        try {
+            const response = await fetch(`${VPS_URL}/upload/${category}`, {
+                method: "POST",
+                headers: headers, // ב-FormData הדפדפן מגדיר את ה-Content-Type אוטומטית
+                body: formData
+            });
+
+            if (!response.ok) throw new Error("העלאה נכשלה");
+            
+            status.style.color = "#10b981";
+            status.innerText = "✅ הקובץ הועלה בהצלחה!";
+            fileInput.value = ""; // איפוס השדה
+            loadFiles(); // רענון הרשימה
+
+        } catch (error) {
+            status.style.color = "#dc2626";
+            status.innerText = "❌ שגיאה בהעלאה: " + error.message;
+        }
+    }
+
+    // פונקציית עזר לשליחת המפתח בעת לחיצה על קישור הורדה
+    function appendKey(e, link) {
+        e.preventDefault();
+        fetch(link.href, { headers })
+            .then(res => res.blob())
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = link.href.split('/').pop();
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            })
+            .catch(err => console.error(err));
+    }
+
+    // טעינה ראשונית
+    loadFiles();
+</script>
+
+</body>
+</html>
