@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const mongoose = require('mongoose');
+const axios = require('axios'); // <-- הועבר למעלה
+const FormData = require('form-data'); // <-- הועבר למעלה
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -212,7 +214,8 @@ function notifyFollowers(post, replyAuthor, replyId, db) {
 }
 
 app.use('/api', (req, res, next) => {
-    if (!dbCache) return res.status(503).json({ error: "השרת עדיין טוען נתונים, נסה שוב בעוד רגע." });
+    // השורה הזו גורמת לכך שנקודות API של הענן יעבדו גם אם ה-DB עוד טוען
+    if (!dbCache && !req.path.startsWith('/cloud')) return res.status(503).json({ error: "השרת עדיין טוען נתונים, נסה שוב בעוד רגע." });
     next();
 });
 
@@ -560,14 +563,12 @@ app.post('/api/admin/approve', (req, res) => { const db = readDB(); const user =
 app.post('/api/admin/delete-user', (req, res) => { const db = readDB(); const { username } = req.body; const user = db.users.find(u => u.username === username); if (user && user.role === 'admin') return res.status(400).json({error:"אי אפשר למחוק מנהל."}); db.users = db.users.filter(u => u.username !== username); writeDB(db); res.json({ success: true }); });
 app.put('/api/admin/users/:username/role', (req, res) => { const db = readDB(); const user = db.users.find(u => u.username === req.params.username); if (user && user.role !== 'admin') { user.role = req.body.role; writeDB(db); res.json({success: true}); } else res.status(400).json({error: "שגיאה"}); });
 
-const axios = require('axios');
-const FormData = require('form-data');
-
-// --- הגדרות החיבור ל-VPS (מוסתר מהגולשים!) ---
+// ==========================================
+// אזור הענן (חיבור ל-VPS)
+// ==========================================
 const VPS_URL = "http://161.97.116.66:8000";
-const VPS_API_KEY = "your_secret_password_123"; // אותה סיסמה שהגדרת בשרת פייתון
+const VPS_API_KEY = "your_secret_password_123";
 
-// 1. קבלת רשימת קבצים (המתווך שואל את ה-VPS ומחזיר לאתר)
 app.get('/api/cloud/list/:category', async (req, res) => {
     try {
         const response = await axios.get(`${VPS_URL}/list/${req.params.category}`, {
@@ -575,61 +576,46 @@ app.get('/api/cloud/list/:category', async (req, res) => {
         });
         res.json(response.data);
     } catch (error) {
-        console.error("שגיאה במשיכת רשימה:", error.message);
-        res.status(500).json({ error: "שגיאה בתקשורת מול שרת האחסון" });
+        res.status(500).json({ error: "שגיאה בתקשורת מול השרת המרכזי" });
     }
 });
 
-// 2. הורדת קובץ (הזרמה ישירה - לא שומר מקום ב-Railway!)
 app.get('/api/cloud/download/:category/:filename', async (req, res) => {
     try {
         const response = await axios.get(`${VPS_URL}/download/${req.params.category}/${req.params.filename}`, {
             headers: { 'x-api-key': VPS_API_KEY },
-            responseType: 'stream' // קריטי: מושך את הקובץ כזרם נתונים
+            responseType: 'stream'
         });
-        
-        // אומר לדפדפן של המשתמש: "הנה קובץ להורדה"
         res.setHeader('Content-Disposition', `attachment; filename="${req.params.filename}"`);
-        
-        // מזרים את המידע ישירות מה-VPS למשתמש דרך הצינור
         response.data.pipe(res);
     } catch (error) {
-        console.error("שגיאה בהורדת קובץ:", error.message);
-        res.status(500).send("הקובץ לא נמצא או שיש שגיאה בשרת האחסון");
+        res.status(500).send("שגיאה בהורדת הקובץ");
     }
 });
 
-// 3. העלאת קובץ (שומר זמנית ב-Railway, שולח ל-VPS ומוחק מיד)
 app.post('/api/cloud/upload/:category', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "לא נבחר קובץ" });
-
     try {
         const form = new FormData();
-        // קורא את הקובץ שהועלה זמנית ל-Railway ומצרף אותו לבקשה
         form.append('file', fs.createReadStream(req.file.path), req.file.originalname);
 
         const response = await axios.post(`${VPS_URL}/upload/${req.params.category}`, form, {
-            headers: {
-                ...form.getHeaders(),
-                'x-api-key': VPS_API_KEY
-            }
+            headers: { ...form.getHeaders(), 'x-api-key': VPS_API_KEY }
         });
 
-        // מחיקת הקובץ הזמני מה-Railway מיד לאחר שהועבר ל-VPS בהצלחה
         fs.unlinkSync(req.file.path);
-        
         res.json(response.data);
     } catch (error) {
-        // גם אם יש שגיאה נמחק את הקובץ מה-Railway כדי לא לסתום מקום
         if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-        console.error("שגיאה בהעלאה:", error.message);
-        res.status(500).json({ error: "שגיאה בהעברת הקובץ לשרת האחסון" });
+        res.status(500).json({ error: "שגיאה בהעלאה" });
     }
 });
 
-// הצגת דף הענן
 app.get('/cloud', (req, res) => {
     res.sendFile(path.join(__dirname, 'cloud.html'));
 });
-// הפעלת השרת
+
+// ==========================================
+// הפעלת השרת הראשי
+// ==========================================
 startServer();
