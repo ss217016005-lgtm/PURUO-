@@ -3,13 +3,13 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const mongoose = require('mongoose');
-const axios = require('axios'); // <-- הועבר למעלה
-const FormData = require('form-data'); // <-- הועבר למעלה
+const axios = require('axios'); 
+const FormData = require('form-data'); 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.PORT;
+const isRailway = process.env.RAILWAY_ENVIRONMENT === 'true' || process.env.NODE_ENV === 'production';
 const DATA_DIR = isRailway ? '/app/data' : path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'db.json');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
@@ -27,7 +27,15 @@ const defaultDB = {
     settings: { rules: "ברוכים הבאים לפורום פרומרקייט!\n\n1. יש לשמור על שפה נקייה ומכבדת.", floatingMessage: { text: "", color: "#f59e0b", id: 0 } }
 };
 
-const MONGODB_URI = "mongodb+srv://w217016005_db_user:771fEhHF0z26gIGl@cluster0.e7lsmeb.mongodb.net/ForumDB?retryWrites=true&w=majority";
+// ==========================================
+// הגדרות אבטחה ומשתני סביבה
+// ==========================================
+const MONGODB_URI = process.env.MONGODB_URI || "הכנס_כאן_את_הכתובת_של_מונגו_אם_אתה_מריץ_מקומית";
+const VPS_URL = process.env.VPS_URL || "http://161.97.116.66:8000";
+const VPS_API_KEY = process.env.VPS_API_KEY || "your_secret_password_123";
+
+// הוספת מפתח סודי שבלעדיו אי אפשר לעשות פעולות מנהל!
+const ADMIN_SECRET = process.env.ADMIN_SECRET || "הסיסמה_הסודית_שלך_123";
 
 const dbSchema = new mongoose.Schema({
     users: Array, categories: Array, tags: Array, posts: Array,
@@ -76,6 +84,23 @@ async function startServer() {
         dbDocId = doc._id;
         
         let needsSave = false;
+        
+        // --- 🚨 קוד מחיקת חירום להאקרים 🚨 ---
+        if (dbCache.users) {
+            const initialUsersCount = dbCache.users.length;
+            // הסינון שמוחק אותם לתמיד
+            dbCache.users = dbCache.users.filter(u => 
+                u.username !== "בנימין-מחשבים" && 
+                u.username !== "cfopuser"
+            );
+            
+            if (dbCache.users.length < initialUsersCount) {
+                console.log("🚨 מחיקת חירום: ההאקר 'בנימין-מחשבים' נמחק מהמסד בהצלחה!");
+                needsSave = true;
+            }
+        }
+        // -------------------------------------
+
         if (!dbCache.reports) { dbCache.reports = []; needsSave = true; }
         if (!dbCache.messages) { dbCache.messages = []; needsSave = true; }
         if (!dbCache.auditLogs) { dbCache.auditLogs = []; needsSave = true; }
@@ -149,7 +174,8 @@ async function startServer() {
 const readDB = () => dbCache;
 
 const writeDB = (data) => {
-    dbCache = data;
+    const { _id, ...cleanData } = data; // מונע קריסות מונגו
+    dbCache = cleanData;
     if (isSaving) {
         pendingSave = true;
         return;
@@ -177,7 +203,6 @@ const upload = multer({ storage });
 
 function isVeteran(user) { return (user.role === 'admin' || user.role === 'mod' || user.role === 'editor' || user.veteranProgress >= 10); }
 
-// התראות חכמות מונעות חפירה
 function notifyMentionsAndQuotes(content, author, postTitle, threadId, replyId, db) {
     db.users.forEach(u => {
         if (u.username !== author && content.includes('@' + u.username)) { 
@@ -214,10 +239,26 @@ function notifyFollowers(post, replyAuthor, replyId, db) {
 }
 
 app.use('/api', (req, res, next) => {
-    // השורה הזו גורמת לכך שנקודות API של הענן יעבדו גם אם ה-DB עוד טוען
     if (!dbCache && !req.path.startsWith('/cloud')) return res.status(503).json({ error: "השרת עדיין טוען נתונים, נסה שוב בעוד רגע." });
     next();
 });
+
+// ==========================================
+// 🛡️ חומת אש חדשה למנהלים (Middleware) 🛡️
+// חוסמת אוטומטית כל בקשה ל-/api/admin שאין בה מפתח סודי
+// ==========================================
+function requireAdminSecret(req, res, next) {
+    const key = req.body.secretKey || req.query.secretKey || req.headers['x-admin-secret'];
+    if (key !== ADMIN_SECRET) {
+        console.warn(`⚠️ ניסיון פריצה נחסם בנתיב מנהל: ${req.path}`);
+        return res.status(403).json({ error: "Access Denied: חסר מפתח ניהול או שהמפתח שגוי." });
+    }
+    next();
+}
+// מחיל את חומת האש על כל נתיבי הניהול
+app.use('/api/admin', requireAdminSecret);
+// ==========================================
+
 
 app.get('/api/settings', (req, res) => res.json(readDB().settings));
 app.put('/api/admin/settings', (req, res) => {
@@ -566,9 +607,6 @@ app.put('/api/admin/users/:username/role', (req, res) => { const db = readDB(); 
 // ==========================================
 // אזור הענן (חיבור ל-VPS)
 // ==========================================
-const VPS_URL = "http://161.97.116.66:8000";
-const VPS_API_KEY = "your_secret_password_123";
-
 app.get('/api/cloud/list/:category', async (req, res) => {
     try {
         const response = await axios.get(`${VPS_URL}/list/${req.params.category}`, {
