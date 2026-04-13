@@ -171,18 +171,38 @@
         const adminUser = localStorage.getItem('forumUser') || sessionStorage.getItem('forumUser');
         
         // ========================================================
-        // 🛡️ מנגנון האבטחה החדש - הוספת המפתח הסודי
+        // 🛡️ מנגנון אבטחה חכם - הסיסמה נשמרת בדפדפן בלבד!
         // ========================================================
-        const ADMIN_SECRET = "123"; // ודא שזה תואם למה ששמת בשרת
+        let ADMIN_SECRET = localStorage.getItem('adminSecretKey');
+
+        if (!ADMIN_SECRET) {
+            // אם המנהל נכנס פעם ראשונה, נבקש ממנו להקליד את הקוד שהגדרנו (13579)
+            ADMIN_SECRET = prompt("🔒 אזור ניהול מאובטח: אנא הקלד את קוד הניהול (Secret Key):");
+            if (ADMIN_SECRET) {
+                localStorage.setItem('adminSecretKey', ADMIN_SECRET);
+            }
+        }
         
-        // פונקציית עזר: עוטפת את fetch הרגיל ומוסיפה את המפתח הסודי מאחורי הקלעים
+        // פונקציית עזר לשליחה מאובטחת
         async function adminFetch(url, options = {}) {
             if (!options.headers) options.headers = {};
             options.headers['x-admin-secret'] = ADMIN_SECRET;
-            return fetch(url, options);
+            
+            const response = await fetch(url, options);
+            
+            if (response.status === 403) {
+                localStorage.removeItem('adminSecretKey'); 
+                alert("🛑 קוד הניהול שהקלדת שגוי! נא לרענן את העמוד ולהקליד את הקוד הנכון.");
+                location.reload(); 
+                throw new Error("Access Denied");
+            }
+            
+            return response;
         }
         // ========================================================
 
+        // משתנה עזר לשמירת כל המשתמשים כדי לתקן את כפתור ההגבלות
+        let allUsersCache = [];
         let allPmsCache = [];
         let currentCategories = [];
         let currentEditingUser = null;
@@ -196,7 +216,7 @@
         }
 
         async function loadData() {
-            // פעולות כלליות משתמשות ב-fetch רגיל
+            // פעולות כלליות
             const sRes = await fetch('/api/settings'); const settings = await sRes.json();
             if (settings) {
                 document.getElementById('settingRules').value = settings.rules || "";
@@ -204,8 +224,10 @@
                 document.getElementById('settingFloatingColor').value = settings.floatingMessage ? settings.floatingMessage.color : "#f59e0b";
             }
 
-            // פעולות ניהול משתמשות מעכשיו ב-adminFetch
-            const uRes = await adminFetch('/api/admin/all-users'); const users = await uRes.json();
+            // טעינת משתמשים בעזרת fetch מאובטח
+            const uRes = await adminFetch('/api/admin/all-users'); 
+            allUsersCache = await uRes.json(); 
+            
             const pRes = await adminFetch('/api/admin/pending-users'); const pending = await pRes.json();
             
             const pendingList = document.getElementById('pendingUsersList');
@@ -220,18 +242,21 @@
                 });
             }
 
-            // תמונות פרופיל ממתינות
+            // טעינת תמונות ממתינות + כפתור מחיקת חירום
             const avRes = await adminFetch('/api/admin/pending-avatars'); const avatars = await avRes.json();
             document.getElementById('pendingAvatarsList').innerHTML = avatars.length === 0 ? "אין תמונות ממתינות." : avatars.map(a => `
-                <div style="background:#fff; border:1px solid #ccc; padding:10px; border-radius:8px; text-align:center; width: 140px;">
+                <div style="background:#fff; border:1px solid #ccc; padding:10px; border-radius:8px; text-align:center; width: 140px; position:relative;">
                     <strong>${a.username}</strong><br>
                     <img src="${a.pendingAvatar}" style="width:100px; height:100px; object-fit:cover; border-radius:50%; margin:10px 0; border:1px solid #ddd;"><br>
                     <button class="btn-approve" onclick="approveAvatar('${a.username.replace(/'/g,"\\'")}', true)">אשר</button>
                     <button class="btn-delete" onclick="approveAvatar('${a.username.replace(/'/g,"\\'")}', false)">דחה</button>
+                    <br><br>
+                    <button style="background:#8e44ad; padding:3px; font-size:11px;" onclick="emergencyClearAvatar('${a.username.replace(/'/g,"\\'")}')">🧹 מחיקת חירום לתמונה תקועה</button>
                 </div>
             `).join('');
             
-            document.getElementById('allUsersTable').innerHTML = users.map(u => {
+            // תצוגת רשימת המשתמשים (הכפתורים מוגנים עם Index!)
+            document.getElementById('allUsersTable').innerHTML = allUsersCache.map((u, index) => {
                 let roleStr = u.role === 'admin' ? '👑 מנהל' : (u.role === 'editor' ? '📝 עורך תוכן' : (u.role === 'mod' ? '🛡️ מפקח' : '👤 משתמש'));
                 if(!u.isApproved && u.role !== 'admin') roleStr += ' (ממתין)';
                 let activity = Date.now() - u.lastActive < 300000 ? `<span style="color:green;">🟢 ${u.currentActivity || 'מחובר'}</span>` : `<span style="color:gray;">לא מחובר</span>`;
@@ -243,7 +268,8 @@
                     if (u.role !== 'user') promoteBtns += `<button class="btn-delete" style="background:#6B7280;" onclick="setRole('${u.username.replace(/'/g, "\\'")}', 'user')">הסר תפקיד</button>`;
                 }
                 
-                const restrictBtn = u.role !== 'admin' ? `<button class="btn-mod" style="background:#e67e22;" onclick="openRestrictions('${u.username.replace(/'/g, "\\'")}', ${u.requiresApproval}, '${JSON.stringify(u.restrictedCats || [])}')">🛑 הגבלות</button>` : '';
+                // התיקון לכפתור ההגבלות! משתמשים במספר (Index) במקום בטקסט ארוך.
+                const restrictBtn = u.role !== 'admin' ? `<button class="btn-mod" style="background:#e67e22;" onclick="openRestrictionsByIndex(${index})">🛑 הגבלות</button>` : '';
                 
                 const customLikesBtn = `<button class="btn-approve" style="background:#10b981;" onclick="addCustomLikes('${u.username.replace(/'/g, "\\'")}')">❤️ הוסף לייקים</button>`;
                 const renameUserBtn = u.role !== 'admin' ? `<button class="btn-mod" style="background:#34495e;" onclick="renameUser('${u.username.replace(/'/g, "\\'")}')">✏️ שנה שם</button>` : '';
@@ -273,6 +299,43 @@
             renderPMs(allPmsCache);
         }
 
+        // ==========================================
+        // פונקציה חדשה: פתיחת מסך הגבלות (לפי אינדקס בטוח)
+        // ==========================================
+        function openRestrictionsByIndex(index) {
+            const u = allUsersCache[index];
+            currentEditingUser = u.username;
+            document.getElementById('restUserLabel').innerText = u.username;
+            document.getElementById('restRequiresApproval').checked = u.requiresApproval;
+            
+            const cats = u.restrictedCats || [];
+            document.getElementById('restCatsList').innerHTML = currentCategories.map(c => `
+                <label style="display:block; cursor:pointer;">
+                    <input type="checkbox" class="rest-cat-cb" value="${c.replace(/"/g, '&quot;')}" ${cats.includes(c) ? 'checked' : ''}> 
+                    חסום גישה ל: ${c}
+                </label>
+            `).join('');
+            
+            document.getElementById('restModal').style.display = 'flex';
+        }
+        
+        async function saveRestrictions() {
+            const requiresApproval = document.getElementById('restRequiresApproval').checked;
+            const restrictedCats = Array.from(document.querySelectorAll('.rest-cat-cb:checked')).map(cb => cb.value);
+            await adminFetch(`/api/admin/users/${currentEditingUser}/restrictions`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adminUser, requiresApproval, restrictedCats}) });
+            document.getElementById('restModal').style.display = 'none';
+            loadData();
+        }
+
+        // מחיקת חירום לתמונה תקועה שאי אפשר לאשר
+        async function emergencyClearAvatar(targetUser) {
+            if(confirm('האם אתה בטוח שברצונך למחוק בכוח את התמונה של משתמש זה?')) {
+                // שולחים בקשת אישור שהיא בעצם דחייה כדי לאפס את השדה
+                await adminFetch('/api/admin/approve-avatar', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adminUser, targetUser, approve: false}) });
+                loadData();
+            }
+        }
+
         window.addCustomLikes = async function(username) {
             const amount = prompt(`כמה לייקים תרצה להוסיף למשתמש ${username}? (ניתן גם מינוס כדי להוריד)`);
             if(!amount || isNaN(amount)) return;
@@ -290,6 +353,7 @@
         window.replyToReport = async function(reporter) {
             const text = prompt(`הודעה שתישלח ל-${reporter} בפרטי:`);
             if(!text) return;
+            // בשליחת הודעה חייבים להשתמש ב-fetch רגיל כי הנתיב הוא לא /api/admin
             const fd = new FormData(); fd.append('from', adminUser); fd.append('to', reporter); fd.append('content', text); fd.append('subject', 'תשובה לדיווח שלך מהנהלת הפורום');
             await fetch('/api/messages', { method: 'POST', body: fd });
             alert('ההודעה נשלחה בהצלחה בפרטי!');
@@ -317,29 +381,6 @@
         async function approveContent(type, postId, replyId) {
             await adminFetch('/api/admin/approve-content', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: adminUser, type, postId, replyId}) });
             loadPendingContent();
-        }
-
-        function openRestrictions(username, requiresApproval, restrictedCatsJson) {
-            currentEditingUser = username;
-            document.getElementById('restUserLabel').innerText = username;
-            document.getElementById('restRequiresApproval').checked = requiresApproval;
-            
-            let cats = [];
-            try { cats = JSON.parse(restrictedCatsJson); } catch(e){}
-            
-            document.getElementById('restCatsList').innerHTML = currentCategories.map(c => `
-                <label style="display:block; cursor:pointer;"><input type="checkbox" class="rest-cat-cb" value="${c.replace(/"/g, '&quot;')}" ${cats.includes(c) ? 'checked' : ''}> חסום גישה ל: ${c}</label>
-            `).join('');
-            
-            document.getElementById('restModal').style.display = 'flex';
-        }
-
-        async function saveRestrictions() {
-            const requiresApproval = document.getElementById('restRequiresApproval').checked;
-            const restrictedCats = Array.from(document.querySelectorAll('.rest-cat-cb:checked')).map(cb => cb.value);
-            await adminFetch(`/api/admin/users/${currentEditingUser}/restrictions`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adminUser, requiresApproval, restrictedCats}) });
-            document.getElementById('restModal').style.display = 'none';
-            loadData();
         }
 
         function renderCategories() {
@@ -417,9 +458,9 @@
         async function deleteUser(username) { if (confirm(`למחוק את "${username}" לצמיתות?`)) { await adminFetch(`/api/admin/delete-user`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ username }) }); loadData(); } }
         async function resolveReport(id) { if (confirm('למחוק את הדיווח?')) { await adminFetch(`/api/admin/reports/${id}`, { method: 'DELETE' }); loadData(); } }
         
-        // תיקון של הנתיב במחיקת אשכול לכתובת הנכונה בשרת
         async function deletePost(id) { 
             if (confirm('מחיקת אשכול?')) { 
+                // גם מחיקת אשכול עוברת לאבטחה החדשה אם הנתיב ישונה בשרת בעתיד, אבל כרגע נשתמש בזה:
                 await fetch('/api/posts/delete-main', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: adminUser, postId: id}) }); 
                 loadData(); 
             } 
