@@ -169,6 +169,20 @@
 
     <script>
         const adminUser = localStorage.getItem('forumUser') || sessionStorage.getItem('forumUser');
+        
+        // ========================================================
+        // 🛡️ מנגנון האבטחה החדש - הוספת המפתח הסודי
+        // ========================================================
+        const ADMIN_SECRET = "הסיסמה_הסודית_שלך_123"; // ודא שזה תואם למה ששמת בשרת
+        
+        // פונקציית עזר: עוטפת את fetch הרגיל ומוסיפה את המפתח הסודי מאחורי הקלעים
+        async function adminFetch(url, options = {}) {
+            if (!options.headers) options.headers = {};
+            options.headers['x-admin-secret'] = ADMIN_SECRET;
+            return fetch(url, options);
+        }
+        // ========================================================
+
         let allPmsCache = [];
         let currentCategories = [];
         let currentEditingUser = null;
@@ -182,6 +196,7 @@
         }
 
         async function loadData() {
+            // פעולות כלליות משתמשות ב-fetch רגיל
             const sRes = await fetch('/api/settings'); const settings = await sRes.json();
             if (settings) {
                 document.getElementById('settingRules').value = settings.rules || "";
@@ -189,8 +204,9 @@
                 document.getElementById('settingFloatingColor').value = settings.floatingMessage ? settings.floatingMessage.color : "#f59e0b";
             }
 
-            const uRes = await fetch('/api/admin/all-users'); const users = await uRes.json();
-            const pRes = await fetch('/api/admin/pending-users'); const pending = await pRes.json();
+            // פעולות ניהול משתמשות מעכשיו ב-adminFetch
+            const uRes = await adminFetch('/api/admin/all-users'); const users = await uRes.json();
+            const pRes = await adminFetch('/api/admin/pending-users'); const pending = await pRes.json();
             
             const pendingList = document.getElementById('pendingUsersList');
             pendingList.innerHTML = '';
@@ -205,7 +221,7 @@
             }
 
             // תמונות פרופיל ממתינות
-            const avRes = await fetch('/api/admin/pending-avatars'); const avatars = await avRes.json();
+            const avRes = await adminFetch('/api/admin/pending-avatars'); const avatars = await avRes.json();
             document.getElementById('pendingAvatarsList').innerHTML = avatars.length === 0 ? "אין תמונות ממתינות." : avatars.map(a => `
                 <div style="background:#fff; border:1px solid #ccc; padding:10px; border-radius:8px; text-align:center; width: 140px;">
                     <strong>${a.username}</strong><br>
@@ -229,7 +245,6 @@
                 
                 const restrictBtn = u.role !== 'admin' ? `<button class="btn-mod" style="background:#e67e22;" onclick="openRestrictions('${u.username.replace(/'/g, "\\'")}', ${u.requiresApproval}, '${JSON.stringify(u.restrictedCats || [])}')">🛑 הגבלות</button>` : '';
                 
-                // כפתורים חדשים לניהול שם ולייקים
                 const customLikesBtn = `<button class="btn-approve" style="background:#10b981;" onclick="addCustomLikes('${u.username.replace(/'/g, "\\'")}')">❤️ הוסף לייקים</button>`;
                 const renameUserBtn = u.role !== 'admin' ? `<button class="btn-mod" style="background:#34495e;" onclick="renameUser('${u.username.replace(/'/g, "\\'")}')">✏️ שנה שם</button>` : '';
 
@@ -242,7 +257,7 @@
             const tRes = await fetch('/api/tags'); const tags = await tRes.json();
             document.getElementById('tagsTable').innerHTML = tags.map(t => `<tr><td><div style="background:${t.color}; width:20px; height:20px; border-radius:50%; margin:auto;"></div></td><td><strong>${t.name}</strong></td><td><button class="btn-delete" onclick="deleteTag('${t.name.replace(/'/g,"\\'")}')">מחק</button></td></tr>`).join('');
 
-            const rRes = await fetch('/api/admin/reports'); const reports = await rRes.json();
+            const rRes = await adminFetch('/api/admin/reports'); const reports = await rRes.json();
             document.getElementById('reportsTable').innerHTML = reports.length === 0 ? "<tr><td colspan='5' style='text-align:center;'>הכל שקט. אין דיווחים.</td></tr>" :
                 reports.map(r => `<tr><td>${r.date}</td><td><strong>${r.reporter}</strong></td><td style="color: red; font-weight: bold;">${r.reason}</td><td>${r.postId ? `<a class="link-btn" href="/?thread=${r.postId}" target="_blank">🔗 הודעה</a>` : 'פנייה כללית'}</td><td><button class="btn-mod" style="background:#3b82f6;" onclick="replyToReport('${r.reporter.replace(/'/g, "\\'")}')">✉️ השב למדווח</button> <button class="btn-approve" onclick="resolveReport(${r.id})">סמן כטופל</button></td></tr>`).join('');
 
@@ -250,25 +265,25 @@
             document.getElementById('postsTable').innerHTML = posts.length === 0 ? "<tr><td colspan='5' style='text-align:center;'>אין אשכולות.</td></tr>" : 
                 posts.reverse().map(p => `<tr><td>${p.date}</td><td><strong>${p.author}</strong></td><td>${p.category}</td><td title="${p.content}"><a style="color:#2980b9;" href="/?thread=${p.id}" target="_blank">${p.title}</a></td><td><button class="btn-delete" onclick="deletePost(${p.id})">מחק אשכול</button></td></tr>`).join('');
 
-            const aRes = await fetch('/api/admin/audit'); const logs = await aRes.json();
+            const aRes = await adminFetch('/api/admin/audit'); const logs = await aRes.json();
             document.getElementById('auditTable').innerHTML = logs.length === 0 ? "<tr><td colspan='4' style='text-align:center;'>אין רישומים.</td></tr>" :
                 logs.map(l => `<tr style="background:#f9fafb;"><td>${l.date}</td><td><strong>${l.editor}</strong></td><td>${l.action}</td><td>${l.details}</td></tr>`).join('');
 
-            const mRes = await fetch('/api/admin/all-messages'); allPmsCache = await mRes.json();
+            const mRes = await adminFetch('/api/admin/all-messages'); allPmsCache = await mRes.json();
             renderPMs(allPmsCache);
         }
 
         window.addCustomLikes = async function(username) {
             const amount = prompt(`כמה לייקים תרצה להוסיף למשתמש ${username}? (ניתן גם מינוס כדי להוריד)`);
             if(!amount || isNaN(amount)) return;
-            await fetch(`/api/admin/users/${username}/likes`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adminUser, amount: parseInt(amount)}) });
+            await adminFetch(`/api/admin/users/${username}/likes`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adminUser, amount: parseInt(amount)}) });
             loadData();
         }
 
         window.renameUser = async function(oldUsername) {
             const newUsername = prompt(`הכנס שם משתמש חדש במקום "${oldUsername}":`);
             if(!newUsername) return;
-            await fetch(`/api/admin/users/${oldUsername}/rename`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adminUser, newUsername}) });
+            await adminFetch(`/api/admin/users/${oldUsername}/rename`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adminUser, newUsername}) });
             loadData();
         }
 
@@ -281,12 +296,12 @@
         }
 
         async function approveAvatar(targetUser, approve) {
-            await fetch('/api/admin/approve-avatar', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adminUser, targetUser, approve}) });
+            await adminFetch('/api/admin/approve-avatar', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adminUser, targetUser, approve}) });
             loadData();
         }
 
         async function loadPendingContent() {
-            const res = await fetch('/api/admin/pending-content'); const pending = await res.json();
+            const res = await adminFetch('/api/admin/pending-content'); const pending = await res.json();
             document.getElementById('pendingContentTable').innerHTML = pending.length === 0 ? "<tr><td colspan='5' style='text-align:center;'>אין הודעות שממתינות לאישור.</td></tr>" :
                 pending.map(p => `<tr>
                     <td>${p.date}</td>
@@ -300,7 +315,7 @@
         }
 
         async function approveContent(type, postId, replyId) {
-            await fetch('/api/admin/approve-content', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: adminUser, type, postId, replyId}) });
+            await adminFetch('/api/admin/approve-content', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: adminUser, type, postId, replyId}) });
             loadPendingContent();
         }
 
@@ -322,7 +337,7 @@
         async function saveRestrictions() {
             const requiresApproval = document.getElementById('restRequiresApproval').checked;
             const restrictedCats = Array.from(document.querySelectorAll('.rest-cat-cb:checked')).map(cb => cb.value);
-            await fetch(`/api/admin/users/${currentEditingUser}/restrictions`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adminUser, requiresApproval, restrictedCats}) });
+            await adminFetch(`/api/admin/users/${currentEditingUser}/restrictions`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({adminUser, requiresApproval, restrictedCats}) });
             document.getElementById('restModal').style.display = 'none';
             loadData();
         }
@@ -349,19 +364,19 @@
             const temp = currentCategories[index];
             currentCategories[index] = currentCategories[newIndex];
             currentCategories[newIndex] = temp;
-            await fetch('/api/admin/categories/reorder', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: adminUser, categories: currentCategories}) });
+            await adminFetch('/api/admin/categories/reorder', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: adminUser, categories: currentCategories}) });
             renderCategories();
         }
         
         async function addTag() {
             const name = document.getElementById('newTagInput').value; const color = document.getElementById('newTagColor').value;
             if(!name) return;
-            await fetch('/api/admin/tags', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, name, color}) });
+            await adminFetch('/api/admin/tags', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, name, color}) });
             document.getElementById('newTagInput').value = ''; loadData();
         }
         async function deleteTag(tagName) {
             if(confirm(`למחוק את התגית "${tagName}"?`)) {
-                await fetch('/api/admin/tags', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, tagName}) });
+                await adminFetch('/api/admin/tags', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, tagName}) });
                 loadData();
             }
         }
@@ -370,7 +385,7 @@
             const rules = document.getElementById('settingRules').value;
             const floatingMessageText = document.getElementById('settingFloatingMsg').value;
             const floatingMessageColor = document.getElementById('settingFloatingColor').value;
-            await fetch('/api/admin/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: adminUser, rules, floatingMessageText, floatingMessageColor}) });
+            await adminFetch('/api/admin/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: adminUser, rules, floatingMessageText, floatingMessageColor}) });
             alert('ההגדרות נשמרו בהצלחה!');
         }
 
@@ -394,14 +409,21 @@
             renderPMs(allPmsCache);
         }
 
-        async function addCategory() { const val = document.getElementById('newCatInput').value; if(!val) return; await fetch('/api/admin/categories', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, newCat:val}) }); document.getElementById('newCatInput').value = ''; loadData(); }
-        async function renameCat(oldCat) { const newCat = prompt(`שנה את שם הקטגוריה "${oldCat}" ל:`); if(!newCat) return; await fetch('/api/admin/categories', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, oldCat, newCat}) }); loadData(); }
-        async function deleteCat(catName) { if(confirm(`למחוק את "${catName}"?`)) { await fetch('/api/admin/categories', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, catName}) }); loadData(); } }
-        async function approveUser(username) { await fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) }); alert("אושר!"); loadData(); }
-        async function setRole(username, role) { if (confirm(`לשנות תפקיד ל-${username}?`)) { await fetch(`/api/admin/users/${username}/role`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({role}) }); loadData(); } }
-        async function deleteUser(username) { if (confirm(`למחוק את "${username}" לצמיתות?`)) { await fetch(`/api/admin/delete-user`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ username }) }); loadData(); } }
-        async function resolveReport(id) { if (confirm('למחוק את הדיווח?')) { await fetch(`/api/admin/reports/${id}`, { method: 'DELETE' }); loadData(); } }
-        async function deletePost(id) { if (confirm('מחיקת אשכול?')) { await fetch(`/api/posts/${id}`, { method: 'DELETE' }); loadData(); } }
+        async function addCategory() { const val = document.getElementById('newCatInput').value; if(!val) return; await adminFetch('/api/admin/categories', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, newCat:val}) }); document.getElementById('newCatInput').value = ''; loadData(); }
+        async function renameCat(oldCat) { const newCat = prompt(`שנה את שם הקטגוריה "${oldCat}" ל:`); if(!newCat) return; await adminFetch('/api/admin/categories', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, oldCat, newCat}) }); loadData(); }
+        async function deleteCat(catName) { if(confirm(`למחוק את "${catName}"?`)) { await adminFetch('/api/admin/categories', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:adminUser, catName}) }); loadData(); } }
+        async function approveUser(username) { await adminFetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) }); alert("אושר!"); loadData(); }
+        async function setRole(username, role) { if (confirm(`לשנות תפקיד ל-${username}?`)) { await adminFetch(`/api/admin/users/${username}/role`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({role}) }); loadData(); } }
+        async function deleteUser(username) { if (confirm(`למחוק את "${username}" לצמיתות?`)) { await adminFetch(`/api/admin/delete-user`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ username }) }); loadData(); } }
+        async function resolveReport(id) { if (confirm('למחוק את הדיווח?')) { await adminFetch(`/api/admin/reports/${id}`, { method: 'DELETE' }); loadData(); } }
+        
+        // תיקון של הנתיב במחיקת אשכול לכתובת הנכונה בשרת
+        async function deletePost(id) { 
+            if (confirm('מחיקת אשכול?')) { 
+                await fetch('/api/posts/delete-main', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: adminUser, postId: id}) }); 
+                loadData(); 
+            } 
+        }
 
         window.onload = loadData;
     </script>
