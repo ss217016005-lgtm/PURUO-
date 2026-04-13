@@ -1,4 +1,4 @@
- const express = require('express');
+const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
@@ -530,60 +530,4 @@ app.get('/api/admin/pending-users', async (req, res) => res.json((await getDB())
 app.post('/api/admin/approve', async (req, res) => { const db = await getDB(); const user = db.users.find(u => u.username === req.body.username); if (user) { user.isApproved = true; await saveDB(db); res.json({ success: true }); } else res.status(404).json({ error: "לא נמצא." }); });
 app.post('/api/admin/delete-user', async (req, res) => { const db = await getDB(); const { username } = req.body; const user = db.users.find(u => u.username === username); if (user && user.role === 'admin') return res.status(400).json({error:"אי אפשר למחוק מנהל."}); db.users = db.users.filter(u => u.username !== username); await saveDB(db); res.json({ success: true }); });
 
-startServer();
-// ==========================================
-// אזור הענן (חיבור ל-VPS)
-// ==========================================
-const VPS_URL = "http://161.97.116.66:8000";
-const VPS_API_KEY = "your_secret_password_123";
-
-app.get('/api/cloud/list/:category', async (req, res) => {
-    try {
-        const response = await axios.get(`${VPS_URL}/list/${req.params.category}`, {
-            headers: { 'x-api-key': VPS_API_KEY }
-        });
-        res.json(response.data);
-    } catch (error) {
-        res.status(500).json({ error: "שגיאה בתקשורת מול השרת המרכזי" });
-    }
-});
-
-app.get('/api/cloud/download/:category/:filename', async (req, res) => {
-    try {
-        const response = await axios.get(`${VPS_URL}/download/${req.params.category}/${req.params.filename}`, {
-            headers: { 'x-api-key': VPS_API_KEY },
-            responseType: 'stream'
-        });
-        res.setHeader('Content-Disposition', `attachment; filename="${req.params.filename}"`);
-        response.data.pipe(res);
-    } catch (error) {
-        res.status(500).send("שגיאה בהורדת הקובץ");
-    }
-});
-
-app.post('/api/cloud/upload/:category', upload.single('file'), async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: "לא נבחר קובץ" });
-    try {
-        const form = new FormData();
-        form.append('file', fs.createReadStream(req.file.path), req.file.originalname);
-
-        const response = await axios.post(`${VPS_URL}/upload/${req.params.category}`, form, {
-            headers: { ...form.getHeaders(), 'x-api-key': VPS_API_KEY }
-        });
-
-        fs.unlinkSync(req.file.path);
-        res.json(response.data);
-    } catch (error) {
-        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-        res.status(500).json({ error: "שגיאה בהעלאה" });
-    }
-});
-
-app.get('/cloud', (req, res) => {
-    res.sendFile(path.join(__dirname, 'cloud.html'));
-});
-
-// ==========================================
-// הפעלת השרת הראשי
-// ==========================================
 startServer();
