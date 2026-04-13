@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const mongoose = require('mongoose');
+const axios = require('axios'); // הוספנו את הכלי לתקשורת עם ה-VPS
+const FormData = require('form-data'); // הוספנו את הכלי לשליחת קבצים
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,7 +36,7 @@ const dbSchema = new mongoose.Schema({
 
 const DBModel = mongoose.model('Database', dbSchema);
 
-// מנגנון חדש: אין יותר Cache! הכל נשמר ונמשך ישירות מ-MongoDB
+// מנגנון הגישה הישירה ל-MongoDB
 async function getDB() {
     let doc = await DBModel.findOne();
     if (!doc) {
@@ -48,42 +50,10 @@ async function saveDB(dbData) {
     await DBModel.updateOne({ _id: dbData._id }, { $set: dbData });
 }
 
-// סטטוס אונליין נשמר רק בזיכרון הזמני כדי לא לחנוק את מונגו כל 3 שניות
 const onlineTracker = {}; 
 
 app.use(express.json()); app.use(express.static(__dirname)); app.use('/uploads', express.static(UPLOADS_DIR));
 app.set('trust proxy', true);
-
-async function startServer() {
-    try {
-        console.log("מתחבר ל-MongoDB...");
-        await mongoose.connect(MONGODB_URI);
-        console.log('✅ מחובר למסד הנתונים בענן (מצב גישה ישירה ללא Cache)');
-
-        if (fs.existsSync(DATA_FILE)) {
-            console.log("⚠️ נמצא קובץ נתונים ישן (db.json)! מתחיל העברה אוטומטית לענן...");
-            try {
-                const rawData = fs.readFileSync(DATA_FILE, 'utf8');
-                const oldData = JSON.parse(rawData);
-                await DBModel.deleteMany({});
-                const newDoc = new DBModel(oldData);
-                await newDoc.save();
-                fs.renameSync(DATA_FILE, DATA_FILE + '.backup');
-                console.log("✅ הנתונים הועברו בהצלחה לענן!");
-            } catch (migErr) {
-                console.error("שגיאה במהלך העברת הנתונים:", migErr);
-            }
-        }
-
-        // ודא שהמסד קיים ומוכן
-        await getDB();
-        
-        app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
-    } catch (e) {
-        console.error("❌ שגיאה קריטית בעליית השרת:", e);
-    }
-}
 
 const storage = multer.diskStorage({ destination: (req, file, cb) => cb(null, UPLOADS_DIR), filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname) });
 const upload = multer({ storage });
@@ -115,20 +85,15 @@ function notifyFollowers(post, replyAuthor, replyId, db) {
             const fu = db.users.find(u => u.username === follower); 
             if (fu) {
                 const exist = fu.notifications.find(n => n.threadId === post.id && n.isNew);
-                if (exist) {
-                    exist.text = `ישנן מספר תגובות חדשות באשכול: "${post.title}"`;
-                } else {
-                    fu.notifications.push({ text: `תגובה חדשה מ-${replyAuthor} באשכול: "${post.title}"`, threadId: post.id, replyId: replyId, isNew: true }); 
-                }
+                if (exist) { exist.text = `ישנן מספר תגובות חדשות באשכול: "${post.title}"`; } 
+                else { fu.notifications.push({ text: `תגובה חדשה מ-${replyAuthor} באשכול: "${post.title}"`, threadId: post.id, replyId: replyId, isNew: true }); }
             } 
         } 
     });
 }
 
-// נתיבי ה-API שעודכנו לעבוד באופן ישיר ואסינכרוני מול DB
-
+// נתיבי הפורום הרגילים
 app.get('/api/settings', async (req, res) => res.json((await getDB()).settings));
-
 app.put('/api/admin/settings', async (req, res) => {
     const { username, rules, floatingMessageText, floatingMessageColor } = req.body; 
     const db = await getDB();
@@ -138,15 +103,12 @@ app.put('/api/admin/settings', async (req, res) => {
     if (db.settings.floatingMessage.text !== floatingMessageText || db.settings.floatingMessage.color !== floatingMessageColor) {
         db.settings.floatingMessage = { text: floatingMessageText, color: floatingMessageColor || "#f59e0b", id: Date.now() }; 
     }
-    await saveDB(db); 
-    res.json({ success: true });
+    await saveDB(db); res.json({ success: true });
 });
 
 app.post('/api/register', async (req, res) => {
-    const { username, password } = req.body; 
-    const db = await getDB();
+    const { username, password } = req.body; const db = await getDB();
     if (db.users.find(u => u.username === username)) return res.status(400).json({ error: "שם המשתמש כבר קיים." });
-
     db.users.push({ 
         username, password, email: '', avatar: '', pendingAvatar: null, signature: '',
         isApproved: false, requiresApproval: false, restrictedCats: [],
@@ -154,90 +116,60 @@ app.post('/api/register', async (req, res) => {
         joinDate: getILTime().split(',')[0], lastSeen: Date.now(), lastActive: Date.now(), 
         notifications: [], totalLikes: 0, postCount: 0, veteranProgress: 0, typingTo: null, typingExpires: 0 
     });
-    await saveDB(db); 
-    res.json({ message: "נרשמת בהצלחה! חשבונך ממתין כעת לאישור מנהל." });
+    await saveDB(db); res.json({ message: "נרשמת בהצלחה! חשבונך ממתין כעת לאישור מנהל." });
 });
 
 app.post('/api/login', async (req, res) => {
-    const { username, password } = req.body; 
-    const db = await getDB();
+    const { username, password } = req.body; const db = await getDB();
     const user = db.users.find(u => u.username === username && u.password === password);
     if (!user) return res.status(401).json({ error: "שם משתמש או סיסמה שגויים." });
     if (!user.isApproved && user.role !== 'admin') return res.status(403).json({ error: "חשבונך עדיין ממתין לאישור מנהל." });
-    
     user.lastSeen = Date.now(); user.lastActive = Date.now(); 
-    await saveDB(db);
-    res.json({ message: "התחברת!", username: user.username, role: user.role });
+    await saveDB(db); res.json({ message: "התחברת!", username: user.username, role: user.role });
 });
 
 app.put('/api/user/profile', upload.single('avatarFile'), async (req, res) => {
-    const { username, oldPassword, newPassword, email, signature } = req.body; 
-    const db = await getDB();
+    const { username, oldPassword, newPassword, email, signature } = req.body; const db = await getDB();
     const user = db.users.find(u => u.username === username);
     if(!user) return res.status(404).json({error: "משתמש לא נמצא."});
-    
     if(newPassword) {
         if(user.password !== oldPassword) return res.status(401).json({error: "הסיסמה הישנה שגויה."});
         user.password = newPassword;
     }
-    user.email = email || user.email;
-    user.signature = signature || user.signature;
-    
+    user.email = email || user.email; user.signature = signature || user.signature;
     if (req.file) { user.pendingAvatar = `/uploads/${req.file.filename}`; }
-    
-    await saveDB(db); 
-    res.json({success: true, message: req.file ? "הפרופיל עודכן. תמונת הפרופיל ממתינה לאישור מנהל." : "הפרופיל עודכן."});
+    await saveDB(db); res.json({success: true, message: req.file ? "הפרופיל עודכן. תמונת הפרופיל ממתינה לאישור מנהל." : "הפרופיל עודכן."});
 });
 
 app.get('/api/users/info', async (req, res) => { 
-    const db = await getDB(); 
-    const info = {}; 
+    const db = await getDB(); const info = {}; 
     db.users.forEach(u => { 
         const tracker = onlineTracker[u.username] || {};
-        info[u.username] = { 
-            role: u.role || 'user', joinDate: u.joinDate || '', 
-            totalLikes: u.totalLikes || 0, postCount: u.postCount || 0, 
-            isVeteran: isVeteran(u), lastSeen: tracker.lastSeen || u.lastSeen || Date.now(), 
-            avatar: u.avatar, signature: u.signature 
-        }; 
+        info[u.username] = { role: u.role || 'user', joinDate: u.joinDate || '', totalLikes: u.totalLikes || 0, postCount: u.postCount || 0, isVeteran: isVeteran(u), lastSeen: tracker.lastSeen || u.lastSeen || Date.now(), avatar: u.avatar, signature: u.signature }; 
     }); 
     res.json(info); 
 });
 
 app.post('/api/ping', async (req, res) => { 
-    const { username, typingTo, currentActivity } = req.body; 
-    const now = Date.now();
-    
+    const { username, typingTo, currentActivity } = req.body; const now = Date.now();
     if (username) {
         if (!onlineTracker[username]) onlineTracker[username] = {};
-        onlineTracker[username].lastSeen = now;
-        onlineTracker[username].currentActivity = currentActivity || 'גולש בפורום';
-        if (typingTo !== undefined) {
-            onlineTracker[username].typingTo = typingTo;
-            onlineTracker[username].typingExpires = now + 4000;
-        }
+        onlineTracker[username].lastSeen = now; onlineTracker[username].currentActivity = currentActivity || 'גולש בפורום';
+        if (typingTo !== undefined) { onlineTracker[username].typingTo = typingTo; onlineTracker[username].typingExpires = now + 4000; }
     }
-    
     const threeMinsAgo = now - 180000; 
     const onlineUsers = Object.keys(onlineTracker).filter(u => onlineTracker[u].lastSeen > threeMinsAgo); 
     const typingUsers = Object.keys(onlineTracker).filter(u => onlineTracker[u].typingTo === username && onlineTracker[u].typingExpires > now); 
-
-    const db = await getDB();
-    let unreadCount = 0, unreadMessages = 0, allNotifs = []; 
+    const db = await getDB(); let unreadCount = 0, unreadMessages = 0, allNotifs = []; 
     if (username) {
         const user = db.users.find(u => u.username === username);
-        if (user) {
-            unreadCount = user.notifications ? user.notifications.filter(n => n.isNew !== false).length : 0; 
-            allNotifs = user.notifications || []; 
-            unreadMessages = db.messages.filter(m => m.to === username && !m.read).length; 
-        }
+        if (user) { unreadCount = user.notifications ? user.notifications.filter(n => n.isNew !== false).length : 0; allNotifs = user.notifications || []; unreadMessages = db.messages.filter(m => m.to === username && !m.read).length; }
     }
     res.json({ onlineUsers, unreadCount, unreadMessages, typingUsers, allNotifs }); 
 });
 
 app.post('/api/notifications/mark-read', async (req, res) => { const { username } = req.body; const db = await getDB(); const user = db.users.find(u => u.username === username); if (user && user.notifications) { user.notifications.forEach(n => n.isNew = false); await saveDB(db); } res.json({ success: true }); });
 app.post('/api/notifications/clear', async (req, res) => { const { username } = req.body; const db = await getDB(); const user = db.users.find(u => u.username === username); if (user) { user.notifications = []; await saveDB(db); } res.json({ success: true }); });
-
 app.get('/api/messages/:username', async (req, res) => { const db = await getDB(); const msgs = db.messages.filter(m => m.to === req.params.username || m.from === req.params.username); res.json(msgs); });
 app.post('/api/messages/read', async (req, res) => { const { username, partner, subject } = req.body; const db = await getDB(); db.messages.forEach(m => { if (m.to === username && m.from === partner && m.subject === subject) m.read = true; }); await saveDB(db); res.json({ success: true }); });
 app.delete('/api/messages/:id', async (req, res) => { const { username } = req.body; const db = await getDB(); const idx = db.messages.findIndex(m => m.id === parseInt(req.params.id) && m.from === username); if (idx > -1) { db.messages.splice(idx, 1); await saveDB(db); res.json({success: true}); } else res.status(403).json({error: "לא מורשה."}); });
@@ -530,4 +462,61 @@ app.get('/api/admin/pending-users', async (req, res) => res.json((await getDB())
 app.post('/api/admin/approve', async (req, res) => { const db = await getDB(); const user = db.users.find(u => u.username === req.body.username); if (user) { user.isApproved = true; await saveDB(db); res.json({ success: true }); } else res.status(404).json({ error: "לא נמצא." }); });
 app.post('/api/admin/delete-user', async (req, res) => { const db = await getDB(); const { username } = req.body; const user = db.users.find(u => u.username === username); if (user && user.role === 'admin') return res.status(400).json({error:"אי אפשר למחוק מנהל."}); db.users = db.users.filter(u => u.username !== username); await saveDB(db); res.json({ success: true }); });
 
-startServer();
+
+// ==========================================
+// אזור הענן (חיבור ל-VPS) - התוספת החדשה
+// ==========================================
+const VPS_URL = "http://161.97.116.66:8000";
+const VPS_API_KEY = "your_secret_password_123";
+
+app.get('/api/cloud/list/:category', async (req, res) => {
+    try {
+        const response = await axios.get(`${VPS_URL}/list/${req.params.category}`, {
+            headers: { 'x-api-key': VPS_API_KEY }
+        });
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({ error: "שגיאה בתקשורת מול השרת המרכזי" });
+    }
+});
+
+app.get('/api/cloud/download/:category/:filename', async (req, res) => {
+    try {
+        const response = await axios.get(`${VPS_URL}/download/${req.params.category}/${req.params.filename}`, {
+            headers: { 'x-api-key': VPS_API_KEY },
+            responseType: 'stream'
+        });
+        res.setHeader('Content-Disposition', `attachment; filename="${req.params.filename}"`);
+        response.data.pipe(res);
+    } catch (error) {
+        res.status(500).send("שגיאה בהורדת הקובץ");
+    }
+});
+
+app.post('/api/cloud/upload/:category', upload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: "לא נבחר קובץ" });
+    try {
+        const form = new FormData();
+        form.append('file', fs.createReadStream(req.file.path), req.file.originalname);
+
+        const response = await axios.post(`${VPS_URL}/upload/${req.params.category}`, form, {
+            headers: { ...form.getHeaders(), 'x-api-key': VPS_API_KEY }
+        });
+
+        fs.unlinkSync(req.file.path);
+        res.json(response.data);
+    } catch (error) {
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        res.status(500).json({ error: "שגיאה בהעלאה" });
+    }
+});
+
+app.get('/cloud', (req, res) => {
+    res.sendFile(path.join(__dirname, 'cloud.html'));
+});
+
+// הפעלת השרת קורית רק פעם אחת בסוף!
+async function startApp() {
+    await startServer();
+}
+startApp();
