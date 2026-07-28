@@ -1,3 +1,42 @@
+# White Page with Clickable Link
+
+using System;
+using System.Windows.Forms;
+
+namespace WhitePageApp
+{
+    public class MainForm : Form
+    {
+        private Button openButton;
+
+        public MainForm()
+        {
+            this.Text = "White Page";
+            this.BackColor = System.Drawing.Color.White;
+            this.Size = new System.Drawing.Size(800, 600);
+
+            openButton = new Button();
+            openButton.Text = "Click Here to Open Website";
+            openButton.Location = new System.Drawing.Point(300, 250);
+            openButton.Click += new EventHandler(OpenButton_Click);
+
+            this.Controls.Add(openButton);
+        }
+
+        private void OpenButton_Click(object sender, EventArgs e)
+        {
+            System.Diagnostics.Process.Start("http://www.example.com");
+        }
+
+        [STAThread]
+        static void Main()
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new MainForm());
+        }
+    }
+}
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
