@@ -1,29 +1,6 @@
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
-<style>
-  #blocked-screen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background-color: black;
-    color: white;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 28px;
-    font-weight: bold;
-    font-family: Arial, sans-serif;
-    text-align: center;
-    z-index: 99999;
-    transition: opacity 0.5s ease;
-  }
-</style>
-<div id="blocked-screen">
-  האתר חסום בהוראת הרבנים
-</div>
     <meta charset="UTF-8">
     <title>פורום פרומרקייט</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📖</text></svg>">
@@ -1265,19 +1242,6 @@
         }
         window.submitEdit = async function(newContent) { if (!newContent) return; await fetch('/api/posts/edit', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser, postId: currentActionPostId, replyId: currentActionReplyId, newContent}) }); loadPosts(); }
     </script>
-<script>
-  document.addEventListener('keydown', function(event) {
-    if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'k') {
-      const screen = document.getElementById('blocked-screen');
-      if (screen) {
-        screen.style.opacity = '0';
-        setTimeout(() => {
-          screen.style.display = 'none';
-        }, 500);
-      }
-    }
-  });
-</script>
 </body>
 </html>
 
