@@ -22,7 +22,7 @@
   }
 </style>
 <div id="blocked-screen">
-  האתר חסום בהוראת הרבנים
+  האתר חסום
 </div>
     <meta charset="UTF-8">
     <title>פורום פרומרקייט</title>
@@ -1278,6 +1278,228 @@
     }
   });
 </script>
+<!-- תחילת קוד מסך חסימה -->
+<div id="blocked-screen">
+  <div class="blocked-card">
+   
+     <!-- כותרת ראשית -->
+    <h1 class="blocked-title">הפורום סגור</h1>
+
+    <!-- פירוט -->
+    <div class="contact-section">
+      <h2 class="contact-heading">מיילים חשובים:</h2>
+      <ul class="contact-list">
+        <li>
+          <div class="contact-info">
+
+            <span class="label">מוקד האוטנט לניתוק אינטרנט:</span>
+            <a href="mailto:aharoni25@gmail.com" class="email">aharoni25@gmail.com</a>
+          </div>
+          <button class="copy-btn" onclick="copyEmail('aharoni25@gmail.com', this)">העתק</button>
+        </li>
+        <li>
+          <div class="contact-info">
+            <span class="label">בית המדרש חזו''א:</span>
+            <a href="mailto:ardt832@gmail.com" class="email">ardt832@gmail.com</a>
+          </div>
+          <button class="copy-btn" onclick="copyEmail('ardt832@gmail.com', this)">העתק</button>
+        </li>
+        <li>
+          <div class="contact-info">
+            <span class="label">משמרת השבת:</span>
+            <a href="mailto:info@mishmeret7.co.il" class="email">info@mishmeret7.co.il</a>
+          </div>
+          <button class="copy-btn" onclick="copyEmail('info@mishmeret7.co.il', this)">העתק</button>
+        </li>
+      </ul>
+    </div>
+
+    <!-- ברכת סיום -->
+    <p class="blessing-text">"ולמזהיר ולנזהר שלומים יתן כמי נהר"</p>
+  </div>
+</div>
+
+<style>
+  #blocked-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #000000;
+    color: #ffffff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    font-family: Arial, system-ui, sans-serif;
+    z-index: 999999;
+    transition: opacity 0.5s ease;
+    direction: rtl;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+
+  .blocked-card {
+    max-width: 580px;
+    width: 100%;
+    background-color: #111111;
+    border: 1px solid #333333;
+    border-radius: 12px;
+    padding: 35px 25px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+  }
+
+  .blocked-icon {
+    width: 80px;
+    height: auto;
+    margin-bottom: 20px;
+  }
+
+  .blocked-title {
+    font-size: 28px;
+    font-weight: bold;
+    color: #ffffff;
+    margin-bottom: 12px;
+  }
+
+  .status-badge {
+    display: inline-block;
+    background-color: #aa0000;
+    color: #ffffff;
+    font-weight: bold;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 15px;
+    margin-bottom: 25px;
+  }
+
+  .contact-section {
+    background-color: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 25px;
+    text-align: right;
+  }
+
+  .contact-heading {
+    font-size: 16px;
+    color: #cccccc;
+    margin-bottom: 15px;
+    font-weight: bold;
+  }
+
+  .contact-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .contact-list li {
+    font-size: 15px;
+    margin-bottom: 12px;
+    line-height: 1.4;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px dotted #333333;
+    padding-bottom: 10px;
+    gap: 10px;
+  }
+
+  .contact-list li:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 0;
+  }
+
+  .contact-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .contact-list .label {
+    color: #dddddd;
+  }
+
+  .contact-list .email {
+    color: #4da6ff;
+    text-decoration: none;
+    direction: ltr;
+    text-align: right;
+    font-size: 14px;
+  }
+
+  .contact-list .email:hover {
+    text-decoration: underline;
+  }
+
+  /* עיצוב כפתור העתקה */
+  .copy-btn {
+    background-color: #2a2a2a;
+    color: #ffffff;
+    border: 1px solid #444444;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    white-space: nowrap;
+  }
+
+  .copy-btn:hover {
+    background-color: #3a3a3a;
+    border-color: #666666;
+  }
+
+  .copy-btn.copied {
+    background-color: #1b5e20;
+    border-color: #2e7d32;
+    color: #81c784;
+  }
+
+  .blessing-text {
+    font-size: 16px;
+    font-style: italic;
+    color: #d4af37; /* גוון זהב */
+    margin: 0;
+    font-weight: 500;
+  }
+</style>
+
+<script>
+  // פונקציית העתקת האימייל ללוח הגזירים
+  function copyEmail(emailText, btnElement) {
+    navigator.clipboard.writeText(emailText).then(() => {
+      const originalText = btnElement.innerText;
+      btnElement.innerText = "הועתק!";
+      btnElement.classList.add("copied");
+      
+      setTimeout(() => {
+        btnElement.innerText = originalText;
+        btnElement.classList.remove("copied");
+      }, 2000);
+    }).catch(err => {
+      console.error('שגיאה בהעתקה: ', err);
+    });
+  }
+
+  // מנגנון הנטרול במקלדת: Ctrl + Shift + F
+  document.addEventListener('keydown', function(event) {
+    if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'F') {
+      const screen = document.getElementById('blocked-screen');
+      if (screen) {
+        screen.style.opacity = '0';
+        setTimeout(() => {
+          screen.style.display = 'none';
+        }, 500);
+      }
+    }
+  });
+</script>
+<!-- סוף קוד מסך חסימה -->
 </body>
 </html>
 
