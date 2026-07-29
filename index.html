@@ -1485,10 +1485,10 @@
       console.error('שגיאה בהעתקה: ', err);
     });
   }
-
-  // מנגנון הנטרול במקלדת: Ctrl + Shift + K
+<script>
   document.addEventListener('keydown', function(event) {
-    if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'K') {
+    // מזהה לחיצה על Ctrl + Shift + K
+    if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'k') {
       const screen = document.getElementById('blocked-screen');
       if (screen) {
         screen.style.opacity = '0';
@@ -1499,7 +1499,6 @@
     }
   });
 </script>
-<!-- סוף קוד מסך חסימה -->
 </body>
 </html>
 
